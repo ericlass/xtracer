@@ -1,0 +1,6 @@
+[package]
+name = "xtracer"
+version = "0.1.0"
+authors = ["ericlass <el@ericlass.de>"]
+
+[dependencies]
