@@ -113,7 +113,11 @@ impl Vector4F {
 
 impl Display for Vector4F {
   fn fmt(&self, f: &mut Formatter) -> Result {
-    write!(f, "[{},{},{},{}]", self.x, self.y, self.z, self.w)
+    let x = self.x;
+    let y = self.y;
+    let z = self.z;
+    let w = self.w;
+    write!(f, "[{},{},{},{}]", x, y, z, w)
   }
 }
 
@@ -200,11 +204,11 @@ struct PluckerCoords {
 }
 
 pub struct Intersection {
-  pos: Vector4F,
-  normal: Vector4F,
-  tex: Vector4F,
-  barycentric: Vector4F,
-  ray_t: f64
+  pub pos: Vector4F,
+  pub normal: Vector4F,
+  pub tex: Vector4F,
+  pub barycentric: Vector4F,
+  pub ray_t: f64
 }
 
 fn plucker(start: &Vector4F, end: &Vector4F) -> PluckerCoords {
@@ -306,13 +310,15 @@ pub fn intersect_ray_triangle(rorg: &Vector4F, rdir: &Vector4F, t1: &Vertex4F, t
       w: 1.0
     };
 
+    let real_t = (&point - rorg).sqr_len() / rdir.sqr_len();
+
     //Fill other intersection info
     let result = Intersection {
       pos: point,
       normal: normal,
       tex: tex,
       barycentric: Vector4F {x: s2, y: s3, z: s1, w: 1.0},
-      ray_t: t
+      ray_t: real_t
     };
 
     return Some(result);

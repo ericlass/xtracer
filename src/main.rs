@@ -1,6 +1,9 @@
+extern crate time;
+
 mod linear;
 
 use linear::Vector4F;
+use linear::Vertex4F;
 
 fn main() {
     let vec = Vector4F{x: 5.0, y:3.0, z: 0.0, w: 1.0};
@@ -44,4 +47,80 @@ fn main() {
 
     let vecr = Vector4F::refract(&veci, &vecn, 1.333);
     println!("Refracted: {}", vecr);
+
+    println!("");
+    println!("=== SPHERE ===");
+    test_sphere();
+
+    println!("");
+    println!("=== TRIANGLE ===");
+    test_triangle();
+
+    println!("");
+    println!("=== BENCHMARK ===");
+    becnhmark();
+}
+
+fn becnhmark() {
+    let count = 100000;
+
+    let rorg = Vector4F{x: 0.0, y:0.0, z: 0.0, w: 1.0};
+    let rdir = Vector4F{x: 0.0, y:1.0, z: 0.0, w: 1.0};
+
+    let sc = Vector4F{x: 0.0, y:3.0, z: 0.0, w: 1.0};
+    let radius = 1.3333;
+
+    let start = time::precise_time_ns();
+    for _i in 0..count {
+        linear::intersect_ray_sphere(&rorg, &rdir, &sc, radius, 100.0).unwrap();
+    }    
+    let end = time::precise_time_ns();
+
+    let duration = (end - start) / count;
+    println!("Ray/Sphere: {}ns", duration);
+}
+
+fn test_sphere() {
+    let rorg = Vector4F{x: 0.0, y:0.0, z: 0.0, w: 1.0};
+    let rdir = Vector4F{x: 0.0, y:1.0, z: 0.0, w: 1.0};
+
+    let sc = Vector4F{x: 0.0, y:3.0, z: 0.0, w: 1.0};
+    let radius = 1.3333;
+
+    let is = linear::intersect_ray_sphere(&rorg, &rdir, &sc, radius, 100.0).unwrap();
+    println!("Pos: {}", is.pos);
+    println!("Normal: {}", is.normal);
+    println!("T: {}", is.ray_t);
+}
+
+fn test_triangle() {
+    let rorg = Vector4F{x: 0.0, y:0.0, z: 0.0, w: 1.0};
+    let rdir = Vector4F{x: 5.1, y:0.0, z: 0.0, w: 1.0};
+
+    let v1 = Vertex4F {
+        pos: Vector4F{x: 5.0, y:1.0, z: 0.0, w: 1.0},
+        normal: Vector4F{x: -1.0, y:0.0, z: 0.0, w: 1.0},
+        tex: Vector4F{x: 0.0, y:0.0, z: 0.0, w: 1.0},
+        color: Vector4F{x: 0.0, y:0.0, z: 0.0, w: 1.0},
+    };
+    let v2 = Vertex4F {
+        pos: Vector4F{x: 5.0, y:-1.0, z: -1.0, w: 1.0},
+        normal: Vector4F{x: -1.0, y:0.0, z: 0.0, w: 1.0},
+        tex: Vector4F{x: 0.0, y:0.0, z: 0.0, w: 1.0},
+        color: Vector4F{x: 0.0, y:0.0, z: 0.0, w: 1.0},
+    };
+    let v3 = Vertex4F {
+        pos: Vector4F{x: 5.0, y:-1.0, z: 1.0, w: 1.0},
+        normal: Vector4F{x: -1.0, y:0.0, z: 0.0, w: 1.0},
+        tex: Vector4F{x: 0.0, y:0.0, z: 0.0, w: 1.0},
+        color: Vector4F{x: 0.0, y:0.0, z: 0.0, w: 1.0},
+    };
+
+    let is = linear::intersect_ray_triangle(&rorg, &rdir, &v1, &v2, &v3, 100.0).unwrap();
+
+    println!("Pos: {}", is.pos);
+    println!("Normal: {}", is.normal);
+    println!("Tex: {}", is.tex);
+    println!("Bary: {}", is.barycentric);
+    println!("Ray T: {}", is.ray_t.sqrt());
 }
