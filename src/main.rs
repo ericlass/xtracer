@@ -58,11 +58,12 @@ fn main() {
 
     println!("");
     println!("=== BENCHMARK ===");
-    becnhmark();
+    benchmark_sphere();
+    benchmark_triangle();
 }
 
-fn becnhmark() {
-    let count = 100000;
+fn benchmark_sphere() {
+    let count = 1000000;
 
     let rorg = Vector4F{x: 0.0, y:0.0, z: 0.0, w: 1.0};
     let rdir = Vector4F{x: 0.0, y:1.0, z: 0.0, w: 1.0};
@@ -72,12 +73,15 @@ fn becnhmark() {
 
     let start = time::precise_time_ns();
     for _i in 0..count {
-        linear::intersect_ray_sphere(&rorg, &rdir, &sc, radius, 100.0).unwrap();
+        //linear::intersect_ray_sphere(&rorg, &rdir, &sc, radius, 100.0);
+        linear::ray_intersects_sphere(&rorg, &rdir, &sc, radius);
     }    
     let end = time::precise_time_ns();
 
-    let duration = (end - start) / count;
-    println!("Ray/Sphere: {}ns", duration);
+    let duration = end - start;
+    let average = (duration as f64) / (count as f64);
+    println!("Ray/Sphere Duration: {}ns", duration);
+    println!("Ray/Sphere Average : {}ns", average);
 }
 
 fn test_sphere() {
@@ -91,6 +95,44 @@ fn test_sphere() {
     println!("Pos: {}", is.pos);
     println!("Normal: {}", is.normal);
     println!("T: {}", is.ray_t);
+}
+
+fn benchmark_triangle() {
+    let count = 1000000;
+
+    let rorg = Vector4F{x: 0.0, y:0.0, z: 0.0, w: 1.0};
+    let rdir = Vector4F{x: 5.1, y:0.0, z: 0.0, w: 1.0};
+
+    let v1 = Vertex4F {
+        pos: Vector4F{x: 5.0, y:1.0, z: 0.0, w: 1.0},
+        normal: Vector4F{x: -1.0, y:0.0, z: 0.0, w: 1.0},
+        tex: Vector4F{x: 0.0, y:0.0, z: 0.0, w: 1.0},
+        color: Vector4F{x: 0.0, y:0.0, z: 0.0, w: 1.0},
+    };
+    let v2 = Vertex4F {
+        pos: Vector4F{x: 5.0, y:-1.0, z: -1.0, w: 1.0},
+        normal: Vector4F{x: -1.0, y:0.0, z: 0.0, w: 1.0},
+        tex: Vector4F{x: 0.0, y:0.0, z: 0.0, w: 1.0},
+        color: Vector4F{x: 0.0, y:0.0, z: 0.0, w: 1.0},
+    };
+    let v3 = Vertex4F {
+        pos: Vector4F{x: 5.0, y:-1.0, z: 1.0, w: 1.0},
+        normal: Vector4F{x: -1.0, y:0.0, z: 0.0, w: 1.0},
+        tex: Vector4F{x: 0.0, y:0.0, z: 0.0, w: 1.0},
+        color: Vector4F{x: 0.0, y:0.0, z: 0.0, w: 1.0},
+    };
+
+    let start = time::precise_time_ns();
+    for _i in 0..count {
+        //linear::intersect_ray_triangle(&rorg, &rdir, &v1, &v2, &v3, 100.0);
+        linear::ray_intersects_triangle(&rorg, &rdir, &v1, &v2, &v3);
+    }    
+    let end = time::precise_time_ns();
+
+    let duration = end - start;
+    let average = (duration as f64) / (count as f64);
+    println!("Ray/Triangle Duration: {}ns", duration);
+    println!("Ray/Triangle Average : {}ns", average);
 }
 
 fn test_triangle() {

@@ -226,50 +226,84 @@ fn side(a: &PluckerCoords, b: &PluckerCoords) -> f64 {
   a.p0 * b.p4 + a.p1 * b.p5 + a.p2 * b.p3 + a.p3 * b.p2 + a.p4 * b.p0 + a.p5 * b.p1
 }
 
-// Intersects ray with triangle using plucker coordinates.
+struct SideProducts {
+  s1: f64,
+  s2: f64,
+  s3: f64
+}
+
+// Calculates side products of ray and triangle.
 //
 // rorg: ray origin
 // rdir: ray direction, scaled by ray length
 // t1: first point of triangle
-// t1: second point of triangle
-// t1: third point of triangle
-// mint_t: minimum T value of ray. If intersection is bigger than this None is returned
-pub fn intersect_ray_triangle(rorg: &Vector4F, rdir: &Vector4F, t1: &Vertex4F, t2: &Vertex4F, t3: &Vertex4F, min_t: f64) -> Option<Intersection> {
-  //Used to test values for beeing close to zero because of limited precision
-  let eps = 0.0000001;
-  let neps = -0.0000001;
-
+// t2: second point of triangle
+// t3: third point of triangle
+fn ray_triangle_side_products(rorg: &Vector4F, rdir: &Vector4F, t1: &Vertex4F, t2: &Vertex4F, t3: &Vertex4F) -> SideProducts {
   let ta = &t1.pos;
   let tb = &t2.pos;
   let tc = &t3.pos;
 
-  let ray_end = &(rorg + rdir);
-
   let tab = &plucker(ta, tb);
-  let tcro = &plucker(tc, rorg);
-  let tcre = &plucker(tc, ray_end);
-
-  //Calculate t of intersection of ray with triangle plane
-  //WARNING: Somehow this is not 100% correct. Don't use for further calculation
-  let g1 = side(tab, tcro);
-  let g2 = side(tab, tcre);
-  let t = g1 / (-g2);
-
-  // If there already was an intersection closer to the camera then return null
-  if t < eps || t > min_t {
-    return None;
-  }
 
   //Calculate barycentric coordinates
   let raypluck = &plucker(rorg, rdir);
   let tbc = &plucker(tb, tc);
   let tca = &plucker(tc, ta);
 
-  let mut s1 = side(raypluck, tab);
-  let mut s2 = side(raypluck, tbc);
-  let mut s3 = side(raypluck, tca);
+  let s1 = side(raypluck, tab);
+  let s2 = side(raypluck, tbc);
+  let s3 = side(raypluck, tca);
 
-  if (s1 > neps && s2 > neps && s3 > neps) || (s1 < eps && s2 < eps && s3 < eps) {
+  SideProducts {
+    s1,
+    s2,
+    s3
+  }
+}
+
+static EPS: f64 = 0.0000001;
+static NEPS: f64 = -0.0000001;
+
+// Checks if ray intersects with triangle using plucker coordinates. Does not provide additional information about the intersection, onyl if it
+// intersects or not. If you required more information, like intersection point, normal... use "intersect_ray_triangle" instead.
+//
+// rorg: ray origin
+// rdir: ray direction, scaled by ray length
+// t1: first point of triangle
+// t2: second point of triangle
+// t3: third point of triangle
+pub fn ray_intersects_triangle(rorg: &Vector4F, rdir: &Vector4F, t1: &Vertex4F, t2: &Vertex4F, t3: &Vertex4F) -> bool {
+  let sides = ray_triangle_side_products(rorg, rdir, t1, t2, t3);
+
+  let s1 = sides.s1;
+  let s2 = sides.s2;
+  let s3 = sides.s3;
+
+  (s1 > NEPS && s2 > NEPS && s3 > NEPS) || (s1 < EPS && s2 < EPS && s3 < EPS)
+}
+
+// Intersects ray with triangle using plucker coordinates and returns all kinds of intersection information, which takes some time to compute.
+// Use ray_intersects_triangle if you only need to to know if the ray intersects the triangle or not.
+//
+// rorg: ray origin
+// rdir: ray direction, scaled by ray length
+// t1: first point of triangle
+// t2: second point of triangle
+// t3: third point of triangle
+// mint_t: minimum T value of ray. If intersection is bigger than this None is returned
+pub fn intersect_ray_triangle(rorg: &Vector4F, rdir: &Vector4F, t1: &Vertex4F, t2: &Vertex4F, t3: &Vertex4F, min_t: f64) -> Option<Intersection> {
+  let ta = &t1.pos;
+  let tb = &t2.pos;
+  let tc = &t3.pos;
+
+  let sides = ray_triangle_side_products(rorg, rdir, t1, t2, t3);
+
+  let mut s1 = sides.s1;
+  let mut s2 = sides.s2;
+  let mut s3 = sides.s3;
+
+  if (s1 > NEPS && s2 > NEPS && s3 > NEPS) || (s1 < EPS && s2 < EPS && s3 < EPS) {
     //Side products are proportional to the signed area
     //of the barycentric triangles. So scale them to sum
     //up to 1 to get barycentric coordinates.
@@ -285,6 +319,12 @@ pub fn intersect_ray_triangle(rorg: &Vector4F, rdir: &Vector4F, t1: &Vertex4F, t
       z: ta.z * s2 + tb.z * s3 + tc.z * s1,
       w: 1.0
     };
+
+    let real_t = (&point - rorg).sqr_len() / rdir.sqr_len();
+
+    if real_t > min_t {
+      return None;
+    }
 
     //Interpolate normal
     let na = &t1.normal;
@@ -310,8 +350,6 @@ pub fn intersect_ray_triangle(rorg: &Vector4F, rdir: &Vector4F, t1: &Vertex4F, t
       w: 1.0
     };
 
-    let real_t = (&point - rorg).sqr_len() / rdir.sqr_len();
-
     //Fill other intersection info
     let result = Intersection {
       pos: point,
@@ -327,6 +365,28 @@ pub fn intersect_ray_triangle(rorg: &Vector4F, rdir: &Vector4F, t1: &Vertex4F, t
   return None;
 }
 
+pub fn ray_intersects_sphere(rorg: &Vector4F, rdir: &Vector4F, sc: &Vector4F, sr: f64) -> bool {
+  let a = rdir.sqr_len();
+
+  let relx = rorg.x - sc.x;
+  let rely = rorg.y - sc.y;
+  let relz = rorg.z - sc.z;
+
+  let b = 2.0 * (rdir.x * relx + rdir.y * rely + rdir.z * relz);
+  let c = relx * relx + rely * rely + relz * relz - sr * sr;
+
+  let discriminant = (b * b) - (4.0 * a * c);
+
+  discriminant >= 0.0
+}
+
+// Intersects ray with sphere.
+//
+// rorg: ray origin
+// rdir: ray direction, scaled by ray length
+// sc: sphere center
+// sr: sphere radius
+// mint_t: minimum T value of ray. If intersection is bigger than this None is returned
 pub fn intersect_ray_sphere(rorg: &Vector4F, rdir: &Vector4F, sc: &Vector4F, sr: f64, min_t: f64) -> Option<Intersection> {
   let a = rdir.sqr_len();
 
