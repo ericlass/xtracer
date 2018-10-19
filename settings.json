@@ -1,0 +1,50 @@
+{
+  "scene": {
+    "materials": [
+      {
+        "id": "mate_blue",
+        "color": [0.0, 1.0, 0.0],
+        "transparency": 0.0,
+        "ior": 1.333,
+        "reflect": 0.5
+      }
+    ],
+    "spheres": [
+      {
+        "center": [0.0, 0.0, 0.0],
+        "radius": 1.0,
+        "material": "mate_blue"
+      }
+    ],
+    "meshes": [
+      {
+        "file": "cube.obj",
+        "translation": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0],
+        "rotation": [0.0, 0.0, 0.0],
+        "material": "mate_blue"
+      }
+    ],
+    "lights": [
+      {
+        "type": "point",
+        "position": [0.0, 0.0, 0.0],
+        "color": [1.0, 1.0, 1.0]
+      },
+      {
+        "type": "sphere",
+        "position": [0.0, 0.0, 0.0],
+        "radius": 0.2,
+        "color": [1.0, 1.0, 1.0],
+        "samples": 16,
+        "visible": true
+      }
+    ]
+  },
+  "output": {
+    "file": "render.png",
+    "width": 1920,
+    "height": 1080,
+    "samples": 1
+  }
+}

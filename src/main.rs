@@ -14,8 +14,8 @@ fn main() {
         w: 1.0
     };
 
-    let img_w = 1024;
-    let img_h = 576;
+    let img_w = 1920;
+    let img_h = 1080;
 
     let img_plane_dist = 1.0;
 
