@@ -262,8 +262,8 @@ fn ray_triangle_side_products(rorg: &Vector4F, rdir: &Vector4F, t1: &Vertex4F, t
   }
 }
 
-static EPS: f64 = 0.0000001;
-static NEPS: f64 = -0.0000001;
+const EPS: f64 = 0.0000001;
+const NEPS: f64 = -0.0000001;
 
 // Checks if ray intersects with triangle using plucker coordinates. Does not provide additional information about the intersection, onyl if it
 // intersects or not. If you required more information, like intersection point, normal... use "intersect_ray_triangle" instead.

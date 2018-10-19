@@ -1,4 +1,5 @@
 extern crate time;
+extern crate image;
 
 mod linear;
 
@@ -6,7 +7,103 @@ use linear::Vector4F;
 use linear::Vertex4F;
 
 fn main() {
-    let vec = Vector4F{x: 5.0, y:3.0, z: 0.0, w: 1.0};
+    let cam_pos = Vector4F {
+        x: 0.0,
+        y: 0.0,
+        z: 0.0,
+        w: 1.0
+    };
+
+    let img_w = 1024;
+    let img_h = 576;
+
+    let img_plane_dist = 1.0;
+
+    let img_ratio = img_w as f64 / img_h as f64;
+    let img_plane_w = img_plane_dist / 2.0;
+    let img_plane_h = img_plane_w / img_ratio;
+
+    let img_plane_l = cam_pos.x - (img_plane_w / 2.0);
+    let img_plane_b = cam_pos.y - (img_plane_h / 2.0);
+
+    let img_pix_inc_h = img_plane_w / img_w as f64;
+    let img_pix_inc_v = img_plane_h / img_h as f64;
+
+    let sp_c = Vector4F {
+        x: 0.0,
+        y: 0.0,
+        z: 5.0,
+        w: 1.0
+    };
+
+    let sp_r = 0.5;
+
+    let mut img = image::RgbImage::new(img_w, img_h);
+
+    let start = time::precise_time_ns();
+    for ix in 0..img_w {
+        for iy in 0..img_h {
+            let px = Vector4F {
+                x: img_plane_l + (ix as f64 * img_pix_inc_h),
+                y: img_plane_b + (iy as f64 * img_pix_inc_v),
+                z: img_plane_dist,
+                w: 0.0
+            };
+
+            let ray_dir = &px - &cam_pos;
+
+            //let intersects = linear::ray_intersects_sphere(&cam_pos, &ray_dir, &sp_c, sp_r);
+            //let mut pixel: image::Rgb<u8>;
+            //if intersects {
+            //    pixel = image::Rgb([255 as u8, 0 as u8, 0 as u8]);
+            //}
+            //else {
+            //    pixel = image::Rgb([64 as u8, 64 as u8, 64 as u8]);
+            //}
+            //img.put_pixel(ix, iy, pixel);
+
+            let intersects = linear::intersect_ray_sphere(&cam_pos, &ray_dir, &sp_c, sp_r, 1000.0);
+            let mut pixel: image::Rgb<u8>;
+            
+            match intersects {
+                Some(inter) => {
+                    let normal = inter.normal;
+                    pixel = image::Rgb([convert(normal.x), convert(normal.y), convert(normal.z)]);
+                },
+                _ => {
+                    pixel = image::Rgb([64 as u8, 64 as u8, 64 as u8]);
+                }
+            };
+
+            img.put_pixel(ix, iy, pixel);
+            
+        }
+    }
+    let end = time::precise_time_ns();
+    let duration_ns = end as f64 - start as f64;
+    let duration = duration_ns / 1000.0;
+    println!("Render time: {}", duration);
+
+    img.save("render.png").unwrap();
+}
+
+fn convert(v: f64) -> u8 {
+    let mut result = v;
+    if result < 0.0 {
+        result = result * -1.0;
+    }
+
+    if result > 1.0 {
+        result = 1.0;
+    }
+
+    result = result * 255.0;
+
+    result as u8
+}
+
+fn generic_tests() {
+        let vec = Vector4F{x: 5.0, y:3.0, z: 0.0, w: 1.0};
     let vec2 = Vector4F{x: 2.0, y:8.0, z: 1.5, w: 1.0};
     
     println!("{}", vec);
