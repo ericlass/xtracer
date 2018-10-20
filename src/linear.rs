@@ -415,7 +415,7 @@ pub fn intersect_ray_sphere(rorg: &Vector4F, rdir: &Vector4F, sc: &Vector4F, sr:
     w: 1.0
   };
 
-  let normal = (sc - &point).normalize();
+  let normal = (&point - sc).normalize();
 
   let result = Intersection {
     pos: point,
