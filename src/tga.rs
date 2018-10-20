@@ -1,6 +1,13 @@
 use std::fs::File;
 use std::io::Write;
 
+//Write image data to simple TGA file with RGB pixels.
+//Spec taken from http://paulbourke.net/dataformats/tga/
+//
+//filename: The name of the file to write to, should end with ".tga"
+//width: The width of the image in pixels
+//height: The height of the image in pixels
+//pixels: The raw pixel data, the pixel value must be us order BGRBGRBGRBGR...
 pub fn write_tga(filename: &str, width: u16, height: u16, pixels: &[u8]) {
   let mut file = File::create(filename).unwrap();
 
