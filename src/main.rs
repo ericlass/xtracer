@@ -1,16 +1,29 @@
 extern crate time;
 
+mod json;
 mod linear;
 mod tga;
 
+use json::JsonValue;
 use linear::Vector4F;
+use std::fs::File;
+use std::io::Read;
 
 fn main() {
+    let mut file = File::open("settings.json").unwrap();
+    let mut json = String::new();
+    file.read_to_string(&mut json).unwrap();
+
+    let json_object = json::parse_json(&json);
+    if let Some(JsonValue::Object(fields)) = json_object {
+        println!("{}", fields.len());
+    }
+
     let cam_pos = Vector4F {
         x: 0.0,
         y: 0.0,
         z: 0.0,
-        w: 1.0
+        w: 1.0,
     };
 
     let img_w = 1920;
@@ -32,7 +45,7 @@ fn main() {
         x: 0.6,
         y: 0.0,
         z: 5.0,
-        w: 1.0
+        w: 1.0,
     };
 
     let sp_r = 0.5;
@@ -41,7 +54,7 @@ fn main() {
         x: -0.1,
         y: 0.0,
         z: 8.0,
-        w: 1.0
+        w: 1.0,
     };
 
     let sp_r2 = 0.5;
@@ -55,12 +68,13 @@ fn main() {
                 x: img_plane_l + (ix as f64 * img_pix_inc_h),
                 y: img_plane_b + (iy as f64 * img_pix_inc_v),
                 z: img_plane_dist,
-                w: 0.0
+                w: 0.0,
             };
 
             let ray_dir = &px - &cam_pos;
             let intersects = linear::intersect_ray_sphere(&cam_pos, &ray_dir, &sp_c, sp_r, 1000.0);
-            let intersects2 = linear::intersect_ray_sphere(&cam_pos, &ray_dir, &sp_c2, sp_r2, 1000.0);
+            let intersects2 =
+                linear::intersect_ray_sphere(&cam_pos, &ray_dir, &sp_c2, sp_r2, 1000.0);
 
             let mut closest: Option<linear::Intersection> = None;
             if intersects.is_some() {
@@ -69,35 +83,31 @@ fn main() {
                     let i2 = intersects2.unwrap();
                     if i1.ray_t < i2.ray_t {
                         closest = Some(i1);
-                    }                    
-                    else {
+                    } else {
                         closest = Some(i2);
                     }
-                }
-                else {
+                } else {
                     closest = intersects;
                 }
-            }
-            else {
+            } else {
                 if intersects2.is_some() {
                     closest = intersects2;
                 }
             }
-            
+
             match closest {
                 Some(inter) => {
                     let normal = inter.normal;
                     pixels.push(convert(normal.z));
                     pixels.push(convert(normal.y));
                     pixels.push(convert(normal.x));
-                },
+                }
                 _ => {
                     pixels.push(64);
                     pixels.push(64);
                     pixels.push(64);
                 }
             };
-          
         }
     }
     let end = time::precise_time_ns();
