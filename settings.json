@@ -2,8 +2,15 @@
   "scene": {
     "materials": [
       {
-        "id": "mate_blue",
+        "id": "mate_green",
         "color": [0.0, 1.0, 0.0],
+        "transparency": 0.0,
+        "ior": 1.333,
+        "reflect": 0.5
+      },
+      {
+        "id": "mate_blue",
+        "color": [0.0, 0.0, 1.0],
         "transparency": 0.0,
         "ior": 1.333,
         "reflect": 0.5
@@ -11,14 +18,14 @@
     ],
     "spheres": [
       {
-        "center": [0.6, 0.0, 5.0],
+        "center": [0.25, 0.0, 5.0],
         "radius": 0.5,
         "material": "mate_blue"
       },
       {
-        "center": [-0.5, 0.0, 7.0],
+        "center": [-0.25, 0.0, 5.2],
         "radius": 0.5,
-        "material": "mate_blue"
+        "material": "mate_green"
       }
     ],
     "meshes": [
@@ -48,8 +55,8 @@
   },
   "output": {
     "file": "render.tga",
-    "width": 3840,
-    "height": 2160,
+    "width": 1920,
+    "height": 1080,
     "samples": 1
   }
 }

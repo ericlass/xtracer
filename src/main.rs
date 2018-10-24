@@ -40,22 +40,29 @@ fn main() {
     let spheres = &settings.scene.spheres;
 
     let start = time::precise_time_ns();
-    for iy in 0..img_h {
-        for ix in 0..img_w {
+    let mut py = img_plane_b; // + (525.0 * img_pix_inc_h);
+    for _iy in 0..img_h {
+    //for _iy in 0..1 {
+        let mut px = img_plane_l; // + (825.0 * img_pix_inc_v);
+        for _ix in 0..img_w {
+        //for _ix in 0..66 {
             let pixel = Vector4F {
-                x: img_plane_l + (ix as f64 * img_pix_inc_h),
-                y: img_plane_b + (iy as f64 * img_pix_inc_v),
+                x: px,
+                y: py,
                 z: img_plane_dist,
                 w: 0.0,
             };
 
             let ray_dir = &pixel - &cam_pos;
 
-            let mut closest: Option<linear::Intersection> = None;
+            let mut closest = None;
+            let mut closest_index = 0;
             let mut min_t = 9999999999.99;
 
-            for sphere in spheres {
-                let intersects = linear::intersect_ray_sphere(
+            for i in 0..spheres.len() {
+                let sphere = &spheres[i];
+
+                let intersection = linear::intersect_ray_sphere(
                     &cam_pos,
                     &ray_dir,
                     &sphere.center,
@@ -63,43 +70,71 @@ fn main() {
                     min_t,
                 );
 
-                if intersects.is_some() {
-                    let inter = intersects.unwrap();
+                if intersection.is_some() {
+                    let inter = intersection.unwrap();
 
-                    if closest.is_some() {
-                        if inter.ray_t < min_t {
-                            min_t = inter.ray_t;
-                            closest = Some(inter);
-                        }
-                    }
-                    else {
+                    //println!("Index: {}", i);
+                    //println!("Ray T: {}", inter.ray_t);
+
+                    if inter.ray_t < min_t {
                         min_t = inter.ray_t;
                         closest = Some(inter);
+                        closest_index = i;
                     }
                 }
             }
 
-            match closest {
-                Some(inter) => {
-                    let normal = inter.normal;
-                    pixels.push(convert(normal.z));
-                    pixels.push(convert(normal.y));
-                    pixels.push(convert(normal.x));
+            if closest.is_some() {
+                //println!("CIndex: {}", closest_index);
+                //println!("Min T: {}", min_t);
+
+                let sp = &spheres[closest_index];
+                //println!("Mat: {}", sp.material);
+                let materials = &settings.scene.materials;
+                let mut material = None;
+                for mat in materials {
+                    if mat.id == sp.material {
+                        material = Some(mat);
+                    }
                 }
-                _ => {
-                    pixels.push(64);
-                    pixels.push(64);
-                    pixels.push(64);
+
+                if material.is_some() {
+                    let mat = material.unwrap();
+                    pixels.push(convert(mat.color.b));
+                    pixels.push(convert(mat.color.g));
+                    pixels.push(convert(mat.color.r));
+                } else {
+                    pixels.push(0);
+                    pixels.push(0);
+                    pixels.push(0);
                 }
-            };
+
+            //let normal = closest.unwrap().normal;
+            //pixels.push(convert(normal.z));
+            //pixels.push(convert(normal.y));
+            //pixels.push(convert(normal.x));
+            } else {
+                pixels.push(64);
+                pixels.push(64);
+                pixels.push(64);
+            }
+
+            px = px + img_pix_inc_h;
         }
+
+        py = py + img_pix_inc_v;
     }
     let end = time::precise_time_ns();
     let duration_ns = end as f64 - start as f64;
     let duration = duration_ns / 1000000.0;
     println!("Render time: {}ms", duration);
 
-    tga::write_tga(settings.output.filename.as_str(), img_w as u16, img_h as u16, pixels.as_slice());
+    tga::write_tga(
+        settings.output.filename.as_str(),
+        img_w as u16,
+        img_h as u16,
+        pixels.as_slice(),
+    );
 }
 
 fn load_settings() -> Settings {
@@ -124,14 +159,11 @@ fn load_settings() -> Settings {
 fn convert(v: f64) -> u8 {
     let mut result = v;
     if result < 0.0 {
-        //result = result * -1.0;
         result = 0.0;
     }
-
     if result > 1.0 {
         result = 1.0;
     }
-
     result = result * 255.0;
 
     result as u8
