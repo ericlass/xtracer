@@ -11,8 +11,13 @@
     ],
     "spheres": [
       {
-        "center": [0.0, 0.0, 0.0],
-        "radius": 1.0,
+        "center": [0.6, 0.0, 5.0],
+        "radius": 0.5,
+        "material": "mate_blue"
+      },
+      {
+        "center": [-0.5, 0.0, 7.0],
+        "radius": 0.5,
         "material": "mate_blue"
       }
     ],
@@ -42,9 +47,9 @@
     ]
   },
   "output": {
-    "file": "render.png",
-    "width": 1920,
-    "height": 1080,
+    "file": "render.tga",
+    "width": 3840,
+    "height": 2160,
     "samples": 1
   }
 }

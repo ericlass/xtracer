@@ -1,5 +1,3 @@
-use std::str::Chars;
-
 pub enum JsonValue {
   Null,
   Number(f64),
@@ -67,7 +65,6 @@ fn read_bool(chars: &mut StringIterator) -> Option<JsonValue> {
       chars.next();
       chars.next();
       chars.next();
-      println!("Read bool: true");
       return Some(JsonValue::Boolean(true));
     } else if c == 'f' || c == 'F' {
       chars.next();
@@ -75,7 +72,6 @@ fn read_bool(chars: &mut StringIterator) -> Option<JsonValue> {
       chars.next();
       chars.next();
       chars.next();
-      println!("Read bool: false");
       return Some(JsonValue::Boolean(false));
     }
   }
@@ -91,7 +87,6 @@ fn read_number(chars: &mut StringIterator) -> Option<JsonValue> {
 
   if number.len() > 0 {
     let result: f64 = number.parse().unwrap();
-    println!("Read number: {}", result);
     return Some(JsonValue::Number(result));
   }
 
@@ -106,7 +101,6 @@ fn read_null(chars: &mut StringIterator) -> Option<JsonValue> {
       chars.next();
       chars.next();
       chars.next();
-      println!("Read null");
       return Some(JsonValue::Null);
     }
   }
@@ -125,7 +119,6 @@ fn read_string(chars: &mut StringIterator) -> Option<JsonValue> {
   //Skip trailing "
   chars.next();
 
-  println!("Read string: {}", result);
   Some(JsonValue::String(result))
 }
 
@@ -216,7 +209,6 @@ fn read_object(chars: &mut StringIterator) -> Option<JsonValue> {
     let mut name = String::new();
     if let Some(JsonValue::String(n)) = name_val {
       name.push_str(n.as_str());
-      println!("Read field name '{}'", name);
     }
     else {
       panic!("Could not read name for object field");
