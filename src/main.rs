@@ -9,6 +9,7 @@ use linear::Vector4F;
 use settings::Settings;
 use std::fs::File;
 use std::io::Read;
+use std::collections::HashMap;
 
 fn main() {
     let settings = load_settings();
@@ -39,13 +40,17 @@ fn main() {
     let mut pixels: Vec<u8> = Vec::with_capacity(((img_w * img_h) * 3) as usize);
     let spheres = &settings.scene.spheres;
 
+    //Create map of materials for faster lookup
+    let mut mat_map = HashMap::new();
+    for m in 0..settings.scene.materials.len() {
+        mat_map.insert(settings.scene.materials[m].id.as_str(), &settings.scene.materials[m]);
+    }
+
     let start = time::precise_time_ns();
-    let mut py = img_plane_b; // + (525.0 * img_pix_inc_h);
+    let mut py = img_plane_b;
     for _iy in 0..img_h {
-    //for _iy in 0..1 {
-        let mut px = img_plane_l; // + (825.0 * img_pix_inc_v);
+        let mut px = img_plane_l;
         for _ix in 0..img_w {
-        //for _ix in 0..66 {
             let pixel = Vector4F {
                 x: px,
                 y: py,
@@ -73,9 +78,6 @@ fn main() {
                 if intersection.is_some() {
                     let inter = intersection.unwrap();
 
-                    //println!("Index: {}", i);
-                    //println!("Ray T: {}", inter.ray_t);
-
                     if inter.ray_t < min_t {
                         min_t = inter.ray_t;
                         closest = Some(inter);
@@ -85,19 +87,9 @@ fn main() {
             }
 
             if closest.is_some() {
-                //println!("CIndex: {}", closest_index);
-                //println!("Min T: {}", min_t);
-
                 let sp = &spheres[closest_index];
-                //println!("Mat: {}", sp.material);
-                let materials = &settings.scene.materials;
-                let mut material = None;
-                for mat in materials {
-                    if mat.id == sp.material {
-                        material = Some(mat);
-                    }
-                }
 
+                let mut material = mat_map.get(sp.material.as_str());
                 if material.is_some() {
                     let mat = material.unwrap();
                     pixels.push(convert(mat.color.b));
@@ -108,11 +100,6 @@ fn main() {
                     pixels.push(0);
                     pixels.push(0);
                 }
-
-            //let normal = closest.unwrap().normal;
-            //pixels.push(convert(normal.z));
-            //pixels.push(convert(normal.y));
-            //pixels.push(convert(normal.x));
             } else {
                 pixels.push(64);
                 pixels.push(64);

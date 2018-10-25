@@ -382,40 +382,31 @@ pub fn ray_intersects_sphere(rorg: &Vector4F, rdir: &Vector4F, sc: &Vector4F, sr
 
 // Intersects ray with sphere.
 //
-// rorg: ray origin
-// rdir: ray direction, scaled by ray length
-// sc: sphere center
-// sr: sphere radius
+// p0: ray origin
+// d: ray direction, scaled by ray length
+// c: sphere center
+// r: sphere radius
 // mint_t: minimum T value of ray. If intersection is bigger than this None is returned
-pub fn intersect_ray_sphere(rorg: &Vector4F, rdir: &Vector4F, sc: &Vector4F, sr: f64, min_t: f64) -> Option<Intersection> {
-  let a = rdir.sqr_len();
+pub fn intersect_ray_sphere(p0: &Vector4F, d: &Vector4F, c: &Vector4F, r: f64, min_t: f64) -> Option<Intersection> {
+  let dnorm = d.normalize();
 
-  let relx = rorg.x - sc.x;
-  let rely = rorg.y - sc.y;
-  let relz = rorg.z - sc.z;
+  let e = c - p0;
+  let le = e.len();
+  let a = Vector4F::dot(&e, &dnorm);
+  let t = a - (r * r - le * le + a * a).sqrt();
 
-  let b = 2.0 * (rdir.x * relx + rdir.y * rely + rdir.z * relz);
-  let c = relx * relx + rely * rely + relz * relz - sr * sr;
-
-  let discriminant = (b * b) - (4.0 * a * c);
-  if discriminant < 0.0 {
-    return None;
-  }
-
-  let m = b * b - 4.0 * c;
-  let t = (-b - m.sqrt()) / 2.0;
   if t < 0.0 || t > min_t {
     return None;
   }
 
   let point = Vector4F {
-    x: rorg.x + rdir.x * t,
-    y: rorg.y + rdir.y * t,
-    z: rorg.z + rdir.z * t,
+    x: p0.x + dnorm.x * t,
+    y: p0.y + dnorm.y * t,
+    z: p0.z + dnorm.z * t,
     w: 1.0
   };
 
-  let normal = (&point - sc).normalize();
+  let normal = (&point - c).normalize();
 
   let result = Intersection {
     pos: point,
@@ -425,5 +416,5 @@ pub fn intersect_ray_sphere(rorg: &Vector4F, rdir: &Vector4F, sc: &Vector4F, sr:
     ray_t: t
   };
 
-  return Some(result);
+  Some(result)
 }
