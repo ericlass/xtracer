@@ -4,6 +4,7 @@ mod json;
 mod linear;
 mod settings;
 mod tga;
+mod shade;
 
 use linear::Vector4F;
 use settings::Settings;
@@ -88,13 +89,37 @@ fn main() {
 
             if closest.is_some() {
                 let sp = &spheres[closest_index];
+                let inter = closest.unwrap();
 
                 let mut material = mat_map.get(sp.material.as_str());
                 if material.is_some() {
+                    let mut lcolor = settings::Color {r: 0.0, g: 0.0, b: 0.0};
+                    for light in &settings.scene.lights {
+                        let ldir = &light.position - &inter.pos;
+                        let mut is_in_shadow = false;
+
+                        for l in 0..spheres.len() {
+                            if l != closest_index {
+                                let ssp = &spheres[l];
+                                if linear::ray_intersects_sphere(&inter.pos, &ldir, &ssp.center, ssp.radius) {
+                                    is_in_shadow = true;
+                                }
+                            }
+                        }
+
+                        if !is_in_shadow {
+                            let s = shade::shade_lambert(&ldir, &inter.normal);
+
+                            lcolor.r = lcolor.r + s * light.color.r;
+                            lcolor.g = lcolor.g + s * light.color.g;
+                            lcolor.b = lcolor.b + s * light.color.b;
+                        }
+                    }
+
                     let mat = material.unwrap();
-                    pixels.push(convert(mat.color.b));
-                    pixels.push(convert(mat.color.g));
-                    pixels.push(convert(mat.color.r));
+                    pixels.push(convert(mat.color.b * lcolor.b));
+                    pixels.push(convert(mat.color.g * lcolor.g));
+                    pixels.push(convert(mat.color.r * lcolor.r));
                 } else {
                     pixels.push(0);
                     pixels.push(0);

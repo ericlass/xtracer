@@ -365,19 +365,22 @@ pub fn intersect_ray_triangle(rorg: &Vector4F, rdir: &Vector4F, t1: &Vertex4F, t
   return None;
 }
 
-pub fn ray_intersects_sphere(rorg: &Vector4F, rdir: &Vector4F, sc: &Vector4F, sr: f64) -> bool {
-  let a = rdir.sqr_len();
+pub fn ray_intersects_sphere(p0: &Vector4F, d: &Vector4F, c: &Vector4F, r: f64) -> bool {
+  let dnorm = d.normalize();
 
-  let relx = rorg.x - sc.x;
-  let rely = rorg.y - sc.y;
-  let relz = rorg.z - sc.z;
+  let e = c - p0;
+  let le = e.len();
+  let a = Vector4F::dot(&e, &dnorm);
+  let f = (r * r - le * le + a * a).sqrt();
 
-  let b = 2.0 * (rdir.x * relx + rdir.y * rely + rdir.z * relz);
-  let c = relx * relx + rely * rely + relz * relz - sr * sr;
+  if f >= 0.0 {
+    let t = a - f;
+    if t >= 0.0 {
+      return true;
+    }
+  }
 
-  let discriminant = (b * b) - (4.0 * a * c);
-
-  discriminant >= 0.0
+  false
 }
 
 // Intersects ray with sphere.
@@ -393,7 +396,14 @@ pub fn intersect_ray_sphere(p0: &Vector4F, d: &Vector4F, c: &Vector4F, r: f64, m
   let e = c - p0;
   let le = e.len();
   let a = Vector4F::dot(&e, &dnorm);
-  let t = a - (r * r - le * le + a * a).sqrt();
+  let f = (r * r - le * le + a * a).sqrt();
+
+  //No intersection
+  if f < 0.0 {
+    return None;
+  }
+
+  let t = a - f;
 
   if t < 0.0 || t > min_t {
     return None;

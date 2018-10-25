@@ -18,12 +18,12 @@
     ],
     "spheres": [
       {
-        "center": [0.25, 0.0, 5.0],
+        "center": [0.5, 0.0, 5.0],
         "radius": 0.5,
         "material": "mate_blue"
       },
       {
-        "center": [-0.25, 0.0, 5.2],
+        "center": [-0.5, 0.0, 5.0],
         "radius": 0.5,
         "material": "mate_green"
       }
@@ -40,23 +40,15 @@
     "lights": [
       {
         "type": "point",
-        "position": [0.0, 0.0, 0.0],
+        "position": [-5.0, 3.0, 2.0],
         "color": [1.0, 1.0, 1.0]
-      },
-      {
-        "type": "sphere",
-        "position": [0.0, 0.0, 0.0],
-        "radius": 0.2,
-        "color": [1.0, 1.0, 1.0],
-        "samples": 16,
-        "visible": true
       }
     ]
   },
   "output": {
     "file": "render.tga",
-    "width": 2560,
-    "height": 1440,
+    "width": 3840,
+    "height": 2160,
     "samples": 1
   }
 }
