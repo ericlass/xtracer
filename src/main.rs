@@ -8,7 +8,10 @@ mod shade;
 
 use linear::Vector4F;
 use settings::Settings;
+use settings::Scene;
+use settings::Color;
 use settings::LightType;
+use settings::Material;
 use std::fs::File;
 use std::io::Read;
 use std::collections::HashMap;
@@ -61,82 +64,12 @@ fn main() {
             };
 
             let ray_dir = &pixel - &cam_pos;
+            let pix_color = trace(&cam_pos, &ray_dir, &settings.scene, &mat_map);
 
-            let mut closest = None;
-            let mut closest_index = 0;
-            let mut min_t = 9999999999.99;
-
-            for i in 0..spheres.len() {
-                let sphere = &spheres[i];
-
-                let intersection = linear::intersect_ray_sphere(
-                    &cam_pos,
-                    &ray_dir,
-                    &sphere.center,
-                    sphere.radius,
-                    min_t,
-                );
-
-                if intersection.is_some() {
-                    let inter = intersection.unwrap();
-
-                    if inter.ray_t < min_t {
-                        min_t = inter.ray_t;
-                        closest = Some(inter);
-                        closest_index = i;
-                    }
-                }
-            }
-
-            if closest.is_some() {
-                let sp = &spheres[closest_index];
-                let inter = closest.unwrap();
-
-                let mut material = mat_map.get(sp.material.as_str());
-                if material.is_some() {
-                    let mut lcolor = settings::Color {r: 0.0, g: 0.0, b: 0.0};
-                    for light in &settings.scene.lights {
-                        if let LightType::Point = light.ltype {
-                            let ldir = &light.position - &inter.pos;
-                            let mut is_in_shadow = false;
-
-                            for l in 0..spheres.len() {
-                                if l != closest_index {
-                                    let ssp = &spheres[l];
-                                    if linear::ray_intersects_sphere(&inter.pos, &ldir, &ssp.center, ssp.radius) {
-                                        is_in_shadow = true;
-                                        break;
-                                    }
-                                }
-                            }
-
-                            if !is_in_shadow {
-                                let s = shade::shade_lambert(&ldir, &inter.normal);
-
-                                lcolor.r = lcolor.r + (s * light.color.r);
-                                lcolor.g = lcolor.g + (s * light.color.g);
-                                lcolor.b = lcolor.b + (s * light.color.b);
-                            }
-                        }
-                        else if let LightType::Sphere = light.ltype {
-                        }
-                    }
-
-                    let mat = material.unwrap();
-                    pixels.push(convert(mat.color.b * lcolor.b));
-                    pixels.push(convert(mat.color.g * lcolor.g));
-                    pixels.push(convert(mat.color.r * lcolor.r));
-                } else {
-                    pixels.push(0);
-                    pixels.push(0);
-                    pixels.push(0);
-                }
-            } else {
-                pixels.push(convert(settings.scene.skycolor.b));
-                pixels.push(convert(settings.scene.skycolor.g));
-                pixels.push(convert(settings.scene.skycolor.r));
-            }
-
+            pixels.push(convert(pix_color.b));
+            pixels.push(convert(pix_color.g));
+            pixels.push(convert(pix_color.r));
+            
             px = px + img_pix_inc_h;
         }
 
@@ -153,6 +86,89 @@ fn main() {
         img_h as u16,
         pixels.as_slice(),
     );
+}
+
+fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, mat_map: &HashMap<&str, &Material>) -> Color {
+    let mut result = Color::black();
+
+    let spheres = &scene.spheres;
+    let mut closest = None;
+    let mut closest_index = 0;
+    let mut min_t = 9999999999.99;
+
+    for i in 0..spheres.len() {
+        let sphere = &spheres[i];
+
+        let intersection = linear::intersect_ray_sphere(
+            &ray_org,
+            &ray_dir,
+            &sphere.center,
+            sphere.radius,
+            min_t,
+        );
+
+        if intersection.is_some() {
+            let inter = intersection.unwrap();
+
+            if inter.ray_t < min_t {
+                min_t = inter.ray_t;
+                closest = Some(inter);
+                closest_index = i;
+            }
+        }
+    }
+
+    if closest.is_some() {
+        let sp = &spheres[closest_index];
+        let inter = closest.unwrap();
+
+        let material = mat_map.get(sp.material.as_str());
+        if material.is_some() {
+            let mut lcolor = Color {r: 0.0, g: 0.0, b: 0.0};
+            for light in &scene.lights {
+                if let LightType::Point = light.ltype {
+                    let ldir = &light.position - &inter.pos;
+                    let mut is_in_shadow = false;
+
+                    for l in 0..spheres.len() {
+                        if l != closest_index {
+                            let ssp = &spheres[l];
+                            if linear::ray_intersects_sphere(&inter.pos, &ldir, &ssp.center, ssp.radius) {
+                                is_in_shadow = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if !is_in_shadow {
+                        let s = shade::shade_lambert(&ldir, &inter.normal);
+
+                        lcolor.r = lcolor.r + (s * light.color.r);
+                        lcolor.g = lcolor.g + (s * light.color.g);
+                        lcolor.b = lcolor.b + (s * light.color.b);
+                    }
+                }
+                else if let LightType::Sphere = light.ltype {
+                }
+            }
+
+            let mat = material.unwrap();
+            result.r = mat.color.r * lcolor.r;
+            result.g = mat.color.g * lcolor.g;
+            result.b = mat.color.b * lcolor.b;
+        } else {
+            //If no material could be found, color is black
+            result.r = 0.0;
+            result.g = 0.0;
+            result.b = 0.0;
+        }
+    } else {
+        result.r = scene.skycolor.r;
+        result.g = scene.skycolor.g;
+        result.b = scene.skycolor.b;
+    }
+
+    result
 }
 
 fn load_settings() -> Settings {

@@ -8,6 +8,16 @@ pub struct Color {
   pub b: f64,
 }
 
+impl Color {
+  pub fn new(r: f64, g: f64, b: f64) -> Color {
+    Color {r, g, b}
+  }
+
+  pub fn black() -> Color {
+    Color {r: 0.0, g: 0.0, b: 0.0}
+  }
+}
+
 pub struct Material {
   pub id: String,
   pub color: Color,
