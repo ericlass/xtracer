@@ -14,6 +14,15 @@ pub struct Vector4F {
 }
 
 impl Vector4F {
+  pub fn null() -> Vector4F {
+    Vector4F{
+      x: 0.0,
+      y: 0.0,
+      z: 0.0,
+      w: 0.0,
+    }
+  }
+
   pub fn add(v1: &Vector4F, v2: &Vector4F) -> Vector4F {
     Vector4F{
       x: v1.x + v2.x,

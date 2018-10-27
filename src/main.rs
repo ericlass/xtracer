@@ -51,6 +51,8 @@ fn main() {
         mat_map.insert(settings.scene.materials[m].id.as_str(), &settings.scene.materials[m]);
     }
 
+    let mut random = Random::new(91802734);
+
     let start = time::precise_time_ns();
     let mut py = img_plane_b;
     for _iy in 0..img_h {
@@ -64,7 +66,7 @@ fn main() {
             };
 
             let ray_dir = &pixel - &cam_pos;
-            let pix_color = trace(&cam_pos, &ray_dir, &settings.scene, &mat_map);
+            let pix_color = trace(&cam_pos, &ray_dir, &settings.scene, &mat_map, &mut random);
 
             pixels.push(convert(pix_color.b));
             pixels.push(convert(pix_color.g));
@@ -88,7 +90,7 @@ fn main() {
     );
 }
 
-fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, mat_map: &HashMap<&str, &Material>) -> Color {
+fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, mat_map: &HashMap<&str, &Material>, random: &mut Random) -> Color {
     let mut result = Color::black();
 
     let spheres = &scene.spheres;
@@ -126,8 +128,10 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, mat_map: &HashMa
         if material.is_some() {
             let mut lcolor = Color {r: 0.0, g: 0.0, b: 0.0};
             for light in &scene.lights {
+                let mut light_intens = 0.0;
+                let ldir = &light.position - &inter.pos;
+
                 if let LightType::Point = light.ltype {
-                    let ldir = &light.position - &inter.pos;
                     let mut is_in_shadow = false;
 
                     for l in 0..spheres.len() {
@@ -140,16 +144,39 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, mat_map: &HashMa
                         }
                     }
 
-                    if !is_in_shadow {
-                        let s = shade::shade_lambert(&ldir, &inter.normal);
-
-                        lcolor.r = lcolor.r + (s * light.color.r);
-                        lcolor.g = lcolor.g + (s * light.color.g);
-                        lcolor.b = lcolor.b + (s * light.color.b);
-                    }
+                    light_intens = if is_in_shadow {0.0} else {1.0};
                 }
                 else if let LightType::Sphere = light.ltype {
+                    let mut v = 0.0;
+
+                    for _sample in 0..light.samples {
+                        let rand_pos = random.random_point_on_sphere(&light.position, light.radius);
+                        let sample_dir = &rand_pos - &inter.pos;
+                        let mut is_in_shadow = false;
+                        for l in 0..spheres.len() {
+                            if l != closest_index {
+                                let ssp = &spheres[l];
+                                if linear::ray_intersects_sphere(&inter.pos, &sample_dir, &ssp.center, ssp.radius) {
+                                    is_in_shadow = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if !is_in_shadow {
+                            v = v + 1.0;
+                        }
+                    }
+
+                    light_intens = v / (light.samples as f64);
                 }
+
+                let s = shade::shade_lambert(&ldir, &inter.normal);
+
+                let light_total = s * light_intens;
+                lcolor.r = lcolor.r + (light.color.r * light_total);
+                lcolor.g = lcolor.g + (light.color.g * light_total);
+                lcolor.b = lcolor.b + (light.color.b * light_total);
             }
 
             let mat = material.unwrap();
@@ -201,4 +228,51 @@ fn convert(v: f64) -> u8 {
     result = result * 255.0;
 
     result as u8
+}
+
+/*
+fn random_point_on_sphere(pos: &Vector4F, radius: f64) -> Vector4F {
+    let u = std::ra
+}
+*/
+
+const PI: f64 = 3.1415926535897932384626433;
+
+struct Random {
+    rand_seed: u32
+}
+
+impl Random {
+    pub fn new(seed: u32) -> Random {
+        Random {rand_seed: seed}
+    }
+
+    pub fn random (&mut self) -> u32 {
+        self.rand_seed = self.rand_seed * 134775813  + 1;
+        self.rand_seed
+    }
+
+    pub fn random_f(&mut self) -> f64 {
+        self.random() as f64 * 2.32830643653870e-10
+    }
+
+    pub fn random_point_on_sphere(&mut self, pos: &Vector4F, radius: f64) -> Vector4F {
+        let u = self.random_f();
+        let v = self.random_f();
+        let theta = 2.0 * PI * u;
+        let phi = (2.0 * v - 1.0).acos();
+        let sin_phi = phi.sin();
+        let x = pos.x + (radius * sin_phi * theta.cos());
+        let y = pos.y + (radius * sin_phi * theta.sin());
+        let z = pos.z + (radius * phi.cos());
+
+        let result = Vector4F {
+            x,
+            y,
+            z,
+            w: 1.0
+        };
+
+        result
+    }
 }

@@ -52,9 +52,11 @@
     ],
     "lights": [
       {
-        "type": "point",
+        "type": "sphere",
         "position": [-3.0, 2.0, 5.0],
-        "color": [0.5, 0.5, 0.5]
+        "color": [0.5, 0.5, 0.5],
+        "radius": 0.2,
+        "samples": 8
       },
       {
         "type": "point",
@@ -65,8 +67,8 @@
   },
   "output": {
     "file": "render.tga",
-    "width": 1920,
-    "height": 1080,
+    "width": 3840,
+    "height": 2160,
     "samples": 1
   }
 }
