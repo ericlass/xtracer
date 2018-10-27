@@ -8,6 +8,7 @@ mod shade;
 
 use linear::Vector4F;
 use settings::Settings;
+use settings::LightType;
 use std::fs::File;
 use std::io::Read;
 use std::collections::HashMap;
@@ -95,24 +96,29 @@ fn main() {
                 if material.is_some() {
                     let mut lcolor = settings::Color {r: 0.0, g: 0.0, b: 0.0};
                     for light in &settings.scene.lights {
-                        let ldir = &light.position - &inter.pos;
-                        let mut is_in_shadow = false;
+                        if let LightType::Point = light.ltype {
+                            let ldir = &light.position - &inter.pos;
+                            let mut is_in_shadow = false;
 
-                        for l in 0..spheres.len() {
-                            if l != closest_index {
-                                let ssp = &spheres[l];
-                                if linear::ray_intersects_sphere(&inter.pos, &ldir, &ssp.center, ssp.radius) {
-                                    is_in_shadow = true;
+                            for l in 0..spheres.len() {
+                                if l != closest_index {
+                                    let ssp = &spheres[l];
+                                    if linear::ray_intersects_sphere(&inter.pos, &ldir, &ssp.center, ssp.radius) {
+                                        is_in_shadow = true;
+                                        break;
+                                    }
                                 }
                             }
+
+                            if !is_in_shadow {
+                                let s = shade::shade_lambert(&ldir, &inter.normal);
+
+                                lcolor.r = lcolor.r + (s * light.color.r);
+                                lcolor.g = lcolor.g + (s * light.color.g);
+                                lcolor.b = lcolor.b + (s * light.color.b);
+                            }
                         }
-
-                        if !is_in_shadow {
-                            let s = shade::shade_lambert(&ldir, &inter.normal);
-
-                            lcolor.r = lcolor.r + s * light.color.r;
-                            lcolor.g = lcolor.g + s * light.color.g;
-                            lcolor.b = lcolor.b + s * light.color.b;
+                        else if let LightType::Sphere = light.ltype {
                         }
                     }
 
