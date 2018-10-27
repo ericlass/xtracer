@@ -54,10 +54,21 @@ fn main() {
     let mut random = Random::new(91802734);
 
     let start = time::precise_time_ns();
+    let mut last_time = time::precise_time_ns();
     let mut py = img_plane_b;
-    for _iy in 0..img_h {
+    let num_pix = img_h * img_w;
+    for iy in 0..img_h {
         let mut px = img_plane_l;
-        for _ix in 0..img_w {
+        for ix in 0..img_w {
+            let this_time = time::precise_time_ns();
+            let diff = this_time - last_time;
+            if diff > 500000000 {
+                let pix_num = (iy * img_w) + ix;
+                let percent = (pix_num as f64 / num_pix as f64) * 100.0;
+                println!("{}%", percent.round());
+                last_time = this_time;
+            }
+
             let pixel = Vector4F {
                 x: px,
                 y: py,
