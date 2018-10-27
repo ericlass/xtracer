@@ -132,9 +132,9 @@ fn main() {
                     pixels.push(0);
                 }
             } else {
-                pixels.push(64);
-                pixels.push(64);
-                pixels.push(64);
+                pixels.push(convert(settings.scene.skycolor.b));
+                pixels.push(convert(settings.scene.skycolor.g));
+                pixels.push(convert(settings.scene.skycolor.r));
             }
 
             px = px + img_pix_inc_h;

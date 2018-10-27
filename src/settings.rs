@@ -49,6 +49,7 @@ pub struct Scene {
   pub spheres: Vec<Sphere>,
   pub meshes: Vec<Mesh>,
   pub lights: Vec<Light>,
+  pub skycolor: Color
 }
 
 pub struct Output {
@@ -93,9 +94,16 @@ fn read_scene(scene: JsonValue) -> Option<Scene> {
     let mut spheres = Vec::new();
     let mut meshes = Vec::new();
     let mut lights = Vec::new();
+    let mut skycolor = Color {r: 0.0, g: 0.0, b: 0.0};
 
     for f in fields {
-      if let JsonValue::Array(values) = f.1 {
+      if f.0 == "skycolor" {
+        let v = read_number_triplet(&f.1).unwrap();
+        skycolor.r = v.0;
+        skycolor.g = v.1;
+        skycolor.b = v.2;
+      }
+      else if let JsonValue::Array(values) = f.1 {
         if f.0 == "materials" {
           materials = read_materials(values);
         } else if f.0 == "spheres" {
@@ -112,7 +120,8 @@ fn read_scene(scene: JsonValue) -> Option<Scene> {
       materials,
       spheres,
       meshes,
-      lights
+      lights,
+      skycolor
     });
   }
 
@@ -140,7 +149,7 @@ fn read_materials(materials: Vec<JsonValue>) -> Vec<Material> {
             id = Some(idstr);
           }
         } else if f.0 == "color" {
-          let values = read_number_triplet(f.1).unwrap();
+          let values = read_number_triplet(&f.1).unwrap();
           color = Some(Color {
             r: values.0,
             g: values.1,
@@ -190,7 +199,7 @@ fn read_spheres(spheres: Vec<JsonValue>) -> Vec<Sphere> {
 
       for f in fields {
         if f.0 == "center" {
-          let values = read_number_triplet(f.1).unwrap();
+          let values = read_number_triplet(&f.1).unwrap();
           center = Vector4F {
             x: values.0,
             y: values.1,
@@ -260,7 +269,7 @@ fn read_lights(lights: Vec<JsonValue>) -> Vec<Light> {
             }
           }
         } else if f.0 == "position" {
-          let values = read_number_triplet(f.1).unwrap();
+          let values = read_number_triplet(&f.1).unwrap();
           position = Vector4F {
             x: values.0,
             y: values.1,
@@ -268,7 +277,7 @@ fn read_lights(lights: Vec<JsonValue>) -> Vec<Light> {
             w: 1.0,
           };
         } else if f.0 == "color" {
-          let values = read_number_triplet(f.1).unwrap();
+          let values = read_number_triplet(&f.1).unwrap();
           color = Color {
             r: values.0,
             g: values.1,
@@ -345,7 +354,7 @@ fn read_output(output: JsonValue) -> Option<Output> {
   None
 }
 
-fn read_number_triplet(array: JsonValue) -> Option<(f64, f64, f64)> {
+fn read_number_triplet(array: &JsonValue) -> Option<(f64, f64, f64)> {
   if let JsonValue::Array(values) = array {
     let mut v1 = 0.0;
     let mut v2 = 0.0;

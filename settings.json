@@ -1,5 +1,6 @@
 {
   "scene": {
+    "skycolor": [0.25, 0.25, 0.25],
     "materials": [
       {
         "id": "mate_red",
