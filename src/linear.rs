@@ -23,6 +23,15 @@ impl Vector4F {
     }
   }
 
+  pub fn copy(v: &Vector4F) -> Vector4F {
+    Vector4F{
+      x: v.x,
+      y: v.y,
+      z: v.z,
+      w: v.w,
+    }
+  }
+
   pub fn add(v1: &Vector4F, v2: &Vector4F) -> Vector4F {
     Vector4F{
       x: v1.x + v2.x,

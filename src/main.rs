@@ -134,6 +134,7 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, mat_map: &HashMa
     if closest.is_some() {
         let sp = &spheres[closest_index];
         let inter = closest.unwrap();
+        let vdir = ray_org - &inter.pos;
 
         let material = mat_map.get(sp.material.as_str());
         if material.is_some() {
@@ -182,7 +183,8 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, mat_map: &HashMa
                     light_intens = v / (light.samples as f64);
                 }
 
-                let s = shade::shade_lambert(&ldir, &inter.normal);
+                //let s = shade::shade_lambert(&ldir, &inter.normal);
+                let s = shade::shade_oren_nayar(&ldir, &inter.normal, &vdir, 0.5, 0.90);
 
                 let light_total = s * light_intens;
                 lcolor.r = lcolor.r + (light.color.r * light_total);
