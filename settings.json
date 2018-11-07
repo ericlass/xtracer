@@ -10,8 +10,8 @@
         "reflect": 0.5
       },
       {
-        "id": "mate_green",
-        "color": [0.0, 1.0, 0.0],
+        "id": "mate_grey",
+        "color": [0.99, 0.99, 0.99],
         "transparency": 0.0,
         "ior": 1.333,
         "reflect": 0.5
@@ -33,7 +33,7 @@
       {
         "center": [-0.5, 0.0, 5.0],
         "radius": 0.4,
-        "material": "mate_green"
+        "material": "mate_grey"
       },
       {
         "center": [0.0, 0.1, 5.0],
@@ -60,15 +60,15 @@
       },
       {
         "type": "point",
-        "position": [0.0, 2.0, 3.0],
+        "position": [2.0, 2.0, 3.0],
         "color": [0.5, 0.5, 0.5]
       }
     ]
   },
   "output": {
     "file": "render.tga",
-    "width": 1920,
-    "height": 1080,
+    "width": 3840,
+    "height": 2160,
     "samples": 1
   }
 }

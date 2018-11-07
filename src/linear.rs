@@ -65,6 +65,10 @@ impl Vector4F {
     }
   }
 
+  pub fn half(v1: &Vector4F, v2: &Vector4F) -> Vector4F {
+    (v1 + v2).normalize()
+  }
+
   pub fn project_scalar(v1: &Vector4F, v2: &Vector4F) -> f64 {
     Vector4F::dot(v1, v2) / v2.sqr_len()
   }

@@ -134,14 +134,15 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, mat_map: &HashMa
     if closest.is_some() {
         let sp = &spheres[closest_index];
         let inter = closest.unwrap();
-        let vdir = ray_org - &inter.pos;
+        let vdir = (ray_org - &inter.pos).normalize();
 
         let material = mat_map.get(sp.material.as_str());
         if material.is_some() {
             let mut lcolor = Color {r: 0.0, g: 0.0, b: 0.0};
             for light in &scene.lights {
                 let mut light_intens = 0.0;
-                let ldir = &light.position - &inter.pos;
+                let ldir = (&light.position - &inter.pos).normalize();
+                let half = Vector4F::half(&vdir, &ldir).normalize();
 
                 if let LightType::Point = light.ltype {
                     let mut is_in_shadow = false;
@@ -184,7 +185,11 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, mat_map: &HashMa
                 }
 
                 //let s = shade::shade_lambert(&ldir, &inter.normal);
-                let s = shade::shade_oren_nayar(&ldir, &inter.normal, &vdir, 0.5, 0.90);
+                let r = 0.3;
+                let sd = shade::shade_oren_nayar(&ldir, &inter.normal, &vdir, r, 0.9);
+                let ss = shade::shade_cook_torrance(&ldir, &vdir, &inter.normal, r, 0.9);
+                let s = sd + ss;
+                //println!("s: {}", s);
 
                 let light_total = s * light_intens;
                 lcolor.r = lcolor.r + (light.color.r * light_total);
