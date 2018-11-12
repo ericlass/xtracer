@@ -1,4 +1,5 @@
 extern crate time;
+extern crate rand;
 
 mod json;
 mod linear;
@@ -43,7 +44,6 @@ fn main() {
     let img_pix_inc_v = img_plane_h / img_h as f64;
 
     let mut pixels: Vec<u8> = Vec::with_capacity(((img_w * img_h) * 3) as usize);
-    let spheres = &settings.scene.spheres;
 
     //Create map of materials for faster lookup
     let mut mat_map = HashMap::new();
@@ -142,7 +142,6 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, mat_map: &HashMa
             for light in &scene.lights {
                 let mut light_intens = 0.0;
                 let ldir = (&light.position - &inter.pos).normalize();
-                let half = Vector4F::half(&vdir, &ldir).normalize();
 
                 if let LightType::Point = light.ltype {
                     let mut is_in_shadow = false;
@@ -185,13 +184,12 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, mat_map: &HashMa
                 }
 
                 //let s = shade::shade_lambert(&ldir, &inter.normal);
-                let r = 0.3;
-                let sd = shade::shade_oren_nayar(&ldir, &inter.normal, &vdir, r, 0.9);
-                let ss = shade::shade_cook_torrance(&ldir, &vdir, &inter.normal, r, 0.9);
-                let s = sd + ss;
-                //println!("s: {}", s);
+                let r = 0.5;
+                let diffuse = shade::shade_oren_nayar(&ldir, &inter.normal, &vdir, r, 0.9);
+                let specular = shade::shade_cook_torrance(&ldir, &vdir, &inter.normal, r, 0.9);
+                let shading = diffuse + specular;
 
-                let light_total = s * light_intens;
+                let light_total = shading * light_intens;
                 lcolor.r = lcolor.r + (light.color.r * light_total);
                 lcolor.g = lcolor.g + (light.color.g * light_total);
                 lcolor.b = lcolor.b + (light.color.b * light_total);
@@ -237,6 +235,11 @@ fn load_settings() -> Settings {
 
 fn convert(v: f64) -> u8 {
     let mut result = v;
+
+    //Add some slight random noise to reduce banding
+    let r = rand::random::<f64>() * 2.0 - 1.0;
+    result = result + (r * (1.0 / 512.0));
+
     if result < 0.0 {
         result = 0.0;
     }
@@ -245,14 +248,8 @@ fn convert(v: f64) -> u8 {
     }
     result = result * 255.0;
 
-    result as u8
+    result.round() as u8
 }
-
-/*
-fn random_point_on_sphere(pos: &Vector4F, radius: f64) -> Vector4F {
-    let u = std::ra
-}
-*/
 
 const PI: f64 = 3.1415926535897932384626433;
 
@@ -266,12 +263,17 @@ impl Random {
     }
 
     pub fn random (&mut self) -> u32 {
-        self.rand_seed = self.rand_seed * 134775813  + 1;
-        self.rand_seed
+        let mut x = self.rand_seed;
+        x = x ^ (x << 13);
+        x = x ^ (x >> 17);
+        x = x ^ (x << 5);
+        self.rand_seed = x;
+
+        x
     }
 
     pub fn random_f(&mut self) -> f64 {
-        self.random() as f64 * 2.32830643653870e-10
+        self.random() as f64 * 2.3283064370807973754314699618685e-10        
     }
 
     pub fn random_point_on_sphere(&mut self, pos: &Vector4F, radius: f64) -> Vector4F {

@@ -67,8 +67,8 @@
   },
   "output": {
     "file": "render.tga",
-    "width": 3840,
-    "height": 2160,
+    "width": 1920,
+    "height": 1080,
     "samples": 1
   }
 }
