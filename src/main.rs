@@ -1,5 +1,6 @@
 extern crate time;
 extern crate rand;
+extern crate num_cpus;
 
 mod json;
 mod linear;
@@ -16,6 +17,11 @@ use settings::Material;
 use std::fs::File;
 use std::io::Read;
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::sync::mpsc;
+use std::thread;
+
+const HALF_SECOND: u64 = 500000000;
 
 fn main() {
     let settings = load_settings();
@@ -45,63 +51,168 @@ fn main() {
 
     let mut pixels: Vec<u8> = Vec::with_capacity(((img_w * img_h) * 3) as usize);
 
-    //Create map of materials for faster lookup
-    let mut mat_map = HashMap::new();
-    for m in 0..settings.scene.materials.len() {
-        mat_map.insert(settings.scene.materials[m].id.as_str(), &settings.scene.materials[m]);
-    }
-
-    let mut random = Random::new(91802734);
+    //Pre-calculate values for multi sampling
+    let samples = settings.output.samples as f64;
+    let sample_width = img_pix_inc_h / samples;
+    let sample_offset = (img_pix_inc_h / 2.0) - (sample_width / 2.0);
 
     let start = time::precise_time_ns();
     let mut last_time = time::precise_time_ns();
+    let mut lines_done = 0;
     let mut py = img_plane_b;
-    let num_pix = img_h * img_w;
-    for iy in 0..img_h {
-        let mut px = img_plane_l;
-        for ix in 0..img_w {
+
+    //let numcpus = num_cpus::get();
+    let numcpus = 8;
+    let mut num_threads = 0;
+    let mut thread_num = 0;
+    let mut iy = 0;    
+    let arc_settings = Arc::new(settings);
+    let arc_cam_pos = Arc::new(cam_pos);
+    let mut lines = Vec::with_capacity(img_h as usize);
+    for _i in 0..img_h {
+        lines.push(Vec::new());
+    }
+
+    let (tx, rx) = mpsc::channel();
+
+    while iy < img_h {
+        while num_threads < numcpus {
+            let larc_settings = arc_settings.clone();
+            let larc_cam_pos = arc_cam_pos.clone();
+            let ltx = mpsc::Sender::clone(&tx);
+            let liy = iy;
+
+            thread::spawn(move || {
+                let mut random = Random::new(31 + thread_num);
+                let mut px = img_plane_l;
+                let mut colors = Vec::with_capacity(img_w as usize);
+
+                for _ix in 0..img_w {
+                    /*
+                    let pixel = Vector4F {
+                        x: px,
+                        y: py,
+                        z: img_plane_dist,
+                        w: 0.0,
+                    };
+
+                    let ray_dir = &pixel - &larc_cam_pos;
+                    let pix_color = trace(&larc_cam_pos, &ray_dir, &larc_settings.scene, &mut random);
+                    colors.push(pix_color);
+                    */
+                    //Create sample grid of samples * samples sub-pixels
+                    let sub_pix_l = px - sample_offset;
+                    let sub_pix_b = py - sample_offset;
+
+                    let mut pix_color = Color::black();
+
+                    let steps = larc_settings.output.samples;
+                    let mut spy = sub_pix_b;
+                    for _spy in 0..steps  {
+                        let mut spx = sub_pix_l;
+                        for _spx in 0..steps {
+                            let pixel = Vector4F {
+                                x: spx,
+                                y: spy,
+                                z: img_plane_dist,
+                                w: 0.0,
+                            };
+
+                            let ray_dir = &pixel - &larc_cam_pos;
+                            let pc = trace(&larc_cam_pos, &ray_dir, &larc_settings.scene, &mut random, 0);
+
+                            pix_color.r += pc.r;
+                            pix_color.g += pc.g;
+                            pix_color.b += pc.b;
+
+                            spx += sample_width;
+                        }
+                        spy += sample_width;
+                    }
+
+                    let samples2 = samples * samples;
+                    pix_color.r = pix_color.r / samples2;
+                    pix_color.g = pix_color.g / samples2;
+                    pix_color.b = pix_color.b / samples2;
+                    colors.push(pix_color);
+
+                    px += img_pix_inc_h;
+                }
+                    
+                ltx.send((liy, colors)).unwrap();
+            });
+            
+            num_threads += 1;
+            py += img_pix_inc_v;
+            iy += 1;
+            thread_num += 1;
+        }
+
+        //Read back results from threads
+        let mut rxv = rx.try_recv();
+        while rxv.is_ok() {
+            let result = rxv.unwrap();
+            let line = result.0;
+            let colors = result.1;
+            lines[line as usize] = colors;
+            num_threads -= 1;
+
+            lines_done += 1;
             let this_time = time::precise_time_ns();
             let diff = this_time - last_time;
-            if diff > 500000000 {
-                let pix_num = (iy * img_w) + ix;
-                let percent = (pix_num as f64 / num_pix as f64) * 100.0;
+            if diff > HALF_SECOND {
+                let percent = (lines_done as f64 / img_h as f64) * 100.0;
                 println!("{}%", percent.round());
                 last_time = this_time;
             }
 
-            let pixel = Vector4F {
-                x: px,
-                y: py,
-                z: img_plane_dist,
-                w: 0.0,
-            };
-
-            let ray_dir = &pixel - &cam_pos;
-            let pix_color = trace(&cam_pos, &ray_dir, &settings.scene, &mat_map, &mut random);
-
-            pixels.push(convert(pix_color.b));
-            pixels.push(convert(pix_color.g));
-            pixels.push(convert(pix_color.r));
-            
-            px = px + img_pix_inc_h;
+            rxv = rx.try_recv();
         }
-
-        py = py + img_pix_inc_v;
     }
+
+    //Read all the rest (blocking)
+    while num_threads > 0 {
+        let rxv = rx.recv();
+        let result = rxv.unwrap();
+        let line = result.0;
+        let colors = result.1;
+        lines[line as usize] = colors;
+        num_threads -= 1;
+    }
+
     let end = time::precise_time_ns();
     let duration_ns = end as f64 - start as f64;
     let duration = duration_ns / 1000000.0;
     println!("Render time: {}ms", duration);
 
+    let conv_start = time::precise_time_ns();
+    let mut rand = Random::new(97);
+    for line in &lines {
+        for col in line {
+            pixels.push(convert(col.b, &mut rand));
+            pixels.push(convert(col.g, &mut rand));
+            pixels.push(convert(col.r, &mut rand));
+        }
+    }    
+    let conv_end = time::precise_time_ns();
+    let duration_ns = conv_end as f64 - conv_start as f64;
+    let duration = duration_ns / 1000000.0;
+    println!("Convert time: {}ms", duration);
+
+    let write_start = time::precise_time_ns();
     tga::write_tga(
-        settings.output.filename.as_str(),
+        arc_settings.output.filename.as_str(),
         img_w as u16,
         img_h as u16,
         pixels.as_slice(),
     );
+    let write_end = time::precise_time_ns();
+    let duration_ns = write_end as f64 - write_start as f64;
+    let duration = duration_ns / 1000000.0;
+    println!("Write time: {}ms", duration);
 }
 
-fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, mat_map: &HashMap<&str, &Material>, random: &mut Random) -> Color {
+fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Random, depth: u32) -> Color {
     let mut result = Color::black();
 
     let spheres = &scene.spheres;
@@ -136,7 +247,14 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, mat_map: &HashMa
         let inter = closest.unwrap();
         let vdir = (ray_org - &inter.pos).normalize();
 
-        let material = mat_map.get(sp.material.as_str());
+        let mut material = None;
+        for mat in &scene.materials {
+            if mat.id == sp.material {
+                material = Some(mat);
+                break;
+            }
+        }
+
         if material.is_some() {
             let mut lcolor = Color {r: 0.0, g: 0.0, b: 0.0};
             for light in &scene.lights {
@@ -185,8 +303,8 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, mat_map: &HashMa
 
                 //let s = shade::shade_lambert(&ldir, &inter.normal);
                 let r = 0.5;
-                let diffuse = shade::shade_oren_nayar(&ldir, &inter.normal, &vdir, r, 0.9);
-                let specular = shade::shade_cook_torrance(&ldir, &vdir, &inter.normal, r, 0.9);
+                let diffuse = shade::shade_oren_nayar(&ldir, &inter.normal, &vdir, r, 0.01);
+                let specular = shade::shade_cook_torrance(&ldir, &vdir, &inter.normal, r, 0.01);
                 let shading = diffuse + specular;
 
                 let light_total = shading * light_intens;
@@ -196,9 +314,41 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, mat_map: &HashMa
             }
 
             let mat = material.unwrap();
-            result.r = mat.color.r * lcolor.r;
-            result.g = mat.color.g * lcolor.g;
-            result.b = mat.color.b * lcolor.b;
+            
+            //Reflection
+            let mut refl_color = Color::black();
+            if mat.reflect > 0.0 {
+                let vr = Vector4F::reflect(&vdir.invert(), &inter.normal).normalize();
+                let rc = trace(&inter.pos, &vr, scene, random, depth + 1);
+
+                //Reflection fresnel (Schlick)
+                let vdotn = Vector4F::dot(&vdir, &inter.normal);
+                let f = (1.0 - vdotn).powf(mat.ior);
+
+                refl_color = Color {
+                    r: rc.r * f * mat.reflect,
+                    g: rc.g * f * mat.reflect,
+                    b: rc.b * f * mat.reflect,
+                };
+            }
+
+            //Refraction
+            //TODO: Does not work!
+            let mut refr_color = Color::black();
+            if mat.refract > 0.0 {
+                let vr = Vector4F::refract(&vdir, &inter.normal, mat.ior).normalize();
+                let rc = trace(&inter.pos, &vr, scene, random, depth + 1);
+
+                refr_color = Color {
+                    r: rc.r * mat.refract,
+                    g: rc.g * mat.refract,
+                    b: rc.b * mat.refract,
+                };
+            }
+
+            result.r = (mat.color.r * lcolor.r) + refl_color.r + refr_color.r;
+            result.g = (mat.color.g * lcolor.g) + refl_color.g + refr_color.g;
+            result.b = (mat.color.b * lcolor.b) + refl_color.b + refr_color.b;
         } else {
             //If no material could be found, color is black
             result.r = 0.0;
@@ -233,19 +383,20 @@ fn load_settings() -> Settings {
     panic!("Unable to read settings!");
 }
 
-fn convert(v: f64) -> u8 {
+fn convert(v: f64, rand: &mut Random) -> u8 {
     let mut result = v;
 
     //Add some slight random noise to reduce banding
-    let r = rand::random::<f64>() * 2.0 - 1.0;
+    let r = rand.random_f() * 2.0 - 1.0;
     result = result + (r * (1.0 / 512.0));
-
+    
     if result < 0.0 {
         result = 0.0;
     }
-    if result > 1.0 {
+    else if result > 1.0 {
         result = 1.0;
     }
+    
     result = result * 255.0;
 
     result.round() as u8

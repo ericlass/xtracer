@@ -124,6 +124,15 @@ impl Vector4F {
     }
   }
 
+  pub fn invert(&self) -> Vector4F {
+    Vector4F{
+      x: self.x * -1.0,
+      y: self.y * -1.0,
+      z: self.z * -1.0,
+      w: self.w
+    }
+  }
+
   pub fn len(&self) -> f64 {
     self.sqr_len().sqrt()
   }
