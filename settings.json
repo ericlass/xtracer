@@ -1,13 +1,14 @@
 {
   "scene": {
     "skycolor": [0.25, 0.25, 0.25],
+    "max_trace_depth": 10,
     "materials": [
       {
         "id": "mate_red",
         "color": [1.0, 0.0, 0.0],
         "transparency": 0.0,
         "ior": 1.333,
-        "reflect": 0.5
+        "reflect": 0.9
       },
       {
         "id": "mate_grey",
@@ -67,8 +68,8 @@
   },
   "output": {
     "file": "render.tga",
-    "width": 1920,
-    "height": 1080,
+    "width": 3840,
+    "height": 2160,
     "samples": 2
   }
 }

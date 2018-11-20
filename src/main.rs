@@ -215,6 +215,10 @@ fn main() {
 fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Random, depth: u32) -> Color {
     let mut result = Color::black();
 
+    if depth > scene.max_trace_depth {
+        return result;
+    }
+
     let spheres = &scene.spheres;
     let mut closest = None;
     let mut closest_index = 0;
