@@ -7,19 +7,19 @@ mod linear;
 mod settings;
 mod tga;
 mod shade;
+mod stopwatch;
 
 use linear::Vector4F;
 use settings::Settings;
 use settings::Scene;
 use settings::Color;
 use settings::LightType;
-use settings::Material;
 use std::fs::File;
 use std::io::Read;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
+use stopwatch::StopWatch;
 
 const HALF_SECOND: u64 = 500000000;
 
@@ -49,22 +49,23 @@ fn main() {
     let img_pix_inc_h = img_plane_w / img_w as f64;
     let img_pix_inc_v = img_plane_h / img_h as f64;
 
-    let mut pixels: Vec<u8> = Vec::with_capacity(((img_w * img_h) * 3) as usize);
-
     //Pre-calculate values for multi sampling
     let samples = settings.output.samples as f64;
+    let samples2 = samples * samples;
     let sample_width = img_pix_inc_h / samples;
     let sample_offset = (img_pix_inc_h / 2.0) - (sample_width / 2.0);
 
-    let start = time::precise_time_ns();
+    let mut stop_watch = StopWatch::new();
+    stop_watch.start();
+
     let mut last_time = time::precise_time_ns();
     let mut lines_done = 0;
     let mut py = img_plane_b;
 
-    //let numcpus = num_cpus::get();
-    let numcpus = 8;
+    let numcpus = num_cpus::get();
+    println!("Number of CPUs: {}", numcpus);
+
     let mut num_threads = 0;
-    let mut thread_num = 0;
     let mut iy = 0;    
     let arc_settings = Arc::new(settings);
     let arc_cam_pos = Arc::new(cam_pos);
@@ -76,30 +77,18 @@ fn main() {
     let (tx, rx) = mpsc::channel();
 
     while iy < img_h {
-        while num_threads < numcpus {
+        while num_threads < numcpus && iy < img_h {
             let larc_settings = arc_settings.clone();
             let larc_cam_pos = arc_cam_pos.clone();
             let ltx = mpsc::Sender::clone(&tx);
             let liy = iy;
 
             thread::spawn(move || {
-                let mut random = Random::new(31 + thread_num);
+                let mut random = Random::new(31 + iy);
                 let mut px = img_plane_l;
                 let mut colors = Vec::with_capacity(img_w as usize);
 
                 for _ix in 0..img_w {
-                    /*
-                    let pixel = Vector4F {
-                        x: px,
-                        y: py,
-                        z: img_plane_dist,
-                        w: 0.0,
-                    };
-
-                    let ray_dir = &pixel - &larc_cam_pos;
-                    let pix_color = trace(&larc_cam_pos, &ray_dir, &larc_settings.scene, &mut random);
-                    colors.push(pix_color);
-                    */
                     //Create sample grid of samples * samples sub-pixels
                     let sub_pix_l = px - sample_offset;
                     let sub_pix_b = py - sample_offset;
@@ -130,7 +119,6 @@ fn main() {
                         spy += sample_width;
                     }
 
-                    let samples2 = samples * samples;
                     pix_color.r = pix_color.r / samples2;
                     pix_color.g = pix_color.g / samples2;
                     pix_color.b = pix_color.b / samples2;
@@ -145,28 +133,25 @@ fn main() {
             num_threads += 1;
             py += img_pix_inc_v;
             iy += 1;
-            thread_num += 1;
         }
 
         //Read back results from threads
         let mut rxv = rx.try_recv();
         while rxv.is_ok() {
             let result = rxv.unwrap();
-            let line = result.0;
-            let colors = result.1;
-            lines[line as usize] = colors;
+            let line = result.0 as usize;
+            lines[line] = result.1;
             num_threads -= 1;
-
             lines_done += 1;
-            let this_time = time::precise_time_ns();
-            let diff = this_time - last_time;
-            if diff > HALF_SECOND {
-                let percent = (lines_done as f64 / img_h as f64) * 100.0;
-                println!("{}%", percent.round());
-                last_time = this_time;
-            }
-
             rxv = rx.try_recv();
+        }
+
+        let this_time = time::precise_time_ns();
+        let diff = this_time - last_time;
+        if diff > HALF_SECOND {
+            let percent = (lines_done as f64 / img_h as f64) * 100.0;
+            println!("{}%", percent.round());
+            last_time = this_time;
         }
     }
 
@@ -180,12 +165,11 @@ fn main() {
         num_threads -= 1;
     }
 
-    let end = time::precise_time_ns();
-    let duration_ns = end as f64 - start as f64;
-    let duration = duration_ns / 1000000.0;
-    println!("Render time: {}ms", duration);
+    stop_watch.stop();
+    println!("Render time: {}ms", stop_watch.get_millis());
 
-    let conv_start = time::precise_time_ns();
+    stop_watch.start();
+    let mut pixels = Vec::with_capacity(((img_w * img_h) * 3) as usize);
     let mut rand = Random::new(97);
     for line in &lines {
         for col in line {
@@ -194,30 +178,22 @@ fn main() {
             pixels.push(convert(col.r, &mut rand));
         }
     }    
-    let conv_end = time::precise_time_ns();
-    let duration_ns = conv_end as f64 - conv_start as f64;
-    let duration = duration_ns / 1000000.0;
-    println!("Convert time: {}ms", duration);
+    stop_watch.stop();
+    println!("Convert time: {}ms", stop_watch.get_millis());
 
-    let write_start = time::precise_time_ns();
+    stop_watch.start();
     tga::write_tga(
         arc_settings.output.filename.as_str(),
         img_w as u16,
         img_h as u16,
         pixels.as_slice(),
     );
-    let write_end = time::precise_time_ns();
-    let duration_ns = write_end as f64 - write_start as f64;
-    let duration = duration_ns / 1000000.0;
-    println!("Write time: {}ms", duration);
+    stop_watch.stop();
+    println!("Write time: {}ms", stop_watch.get_millis());
 }
 
 fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Random, depth: u32) -> Color {
     let mut result = Color::black();
-
-    if depth > scene.max_trace_depth {
-        return result;
-    }
 
     let spheres = &scene.spheres;
     let mut closest = None;
@@ -260,7 +236,9 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
         }
 
         if material.is_some() {
-            let mut lcolor = Color {r: 0.0, g: 0.0, b: 0.0};
+            let mat = material.unwrap();
+            let mut lcolor = Color::black();
+
             for light in &scene.lights {
                 let mut light_intens = 0.0;
                 let ldir = (&light.position - &inter.pos).normalize();
@@ -305,10 +283,13 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                     light_intens = v / (light.samples as f64);
                 }
 
-                //let s = shade::shade_lambert(&ldir, &inter.normal);
-                let r = 0.5;
-                let diffuse = shade::shade_oren_nayar(&ldir, &inter.normal, &vdir, r, 0.01);
-                let specular = shade::shade_cook_torrance(&ldir, &vdir, &inter.normal, r, 0.01);
+                //Realistic inverse-square light attenuation
+                let ldist = (&light.position - &inter.pos).len();
+                let ratio = light.radius / ldist;
+                light_intens = (ratio * ratio) * light_intens * light.intensity;
+
+                let diffuse = shade::shade_oren_nayar(&ldir, &inter.normal, &vdir, mat.roughness, 0.01);
+                let specular = shade::shade_cook_torrance(&ldir, &vdir, &inter.normal, mat.roughness, 0.01);
                 let shading = diffuse + specular;
 
                 let light_total = shading * light_intens;
@@ -317,8 +298,6 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                 lcolor.b = lcolor.b + (light.color.b * light_total);
             }
 
-            let mat = material.unwrap();
-            
             //Reflection
             let mut refl_color = Color::black();
             if mat.reflect > 0.0 {
@@ -338,6 +317,7 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
 
             //Refraction
             //TODO: Does not work!
+            /*
             let mut refr_color = Color::black();
             if mat.refract > 0.0 {
                 let vr = Vector4F::refract(&vdir, &inter.normal, mat.ior).normalize();
@@ -349,10 +329,11 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                     b: rc.b * mat.refract,
                 };
             }
+            */
 
-            result.r = (mat.color.r * lcolor.r) + refl_color.r + refr_color.r;
-            result.g = (mat.color.g * lcolor.g) + refl_color.g + refr_color.g;
-            result.b = (mat.color.b * lcolor.b) + refl_color.b + refr_color.b;
+            result.r = (mat.color.r * lcolor.r) + refl_color.r;
+            result.g = (mat.color.g * lcolor.g) + refl_color.g;
+            result.b = (mat.color.b * lcolor.b) + refl_color.b;
         } else {
             //If no material could be found, color is black
             result.r = 0.0;

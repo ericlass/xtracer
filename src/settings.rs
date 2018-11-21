@@ -24,6 +24,7 @@ pub struct Material {
   pub reflect: f64,
   pub refract: f64,
   pub ior: f64,
+  pub roughness: f64
 }
 
 pub struct Sphere {
@@ -52,6 +53,7 @@ pub struct Light {
   pub visible: bool,
   pub radius: f64,
   pub samples: u32,
+  pub intensity: f64
 }
 
 pub struct Scene {
@@ -59,8 +61,7 @@ pub struct Scene {
   pub spheres: Vec<Sphere>,
   pub meshes: Vec<Mesh>,
   pub lights: Vec<Light>,
-  pub skycolor: Color,
-  pub max_trace_depth: u32
+  pub skycolor: Color
 }
 
 pub struct Output {
@@ -106,7 +107,6 @@ fn read_scene(scene: JsonValue) -> Option<Scene> {
     let mut meshes = Vec::new();
     let mut lights = Vec::new();
     let mut skycolor = Color {r: 0.0, g: 0.0, b: 0.0};
-    let mut max_trace_depth = 5;
 
     for f in fields {
       if f.0 == "skycolor" {
@@ -114,11 +114,6 @@ fn read_scene(scene: JsonValue) -> Option<Scene> {
         skycolor.r = v.0;
         skycolor.g = v.1;
         skycolor.b = v.2;
-      }
-      else if f.0 == "max_trace_depth" {
-        if let JsonValue::Number(v) = f.1 {
-          max_trace_depth = v as u32;
-        }
       }
       else if let JsonValue::Array(values) = f.1 {
         if f.0 == "materials" {
@@ -138,8 +133,7 @@ fn read_scene(scene: JsonValue) -> Option<Scene> {
       spheres,
       meshes,
       lights,
-      skycolor,
-      max_trace_depth
+      skycolor
     });
   }
 
@@ -152,14 +146,11 @@ fn read_materials(materials: Vec<JsonValue>) -> Vec<Material> {
   for mat in materials {
     if let JsonValue::Object(fields) = mat {
       let mut id: Option<String> = None;
-      let mut color: Option<Color> = Some(Color {
-        r: 0.0,
-        g: 0.0,
-        b: 0.0,
-      });
-      let mut reflect: Option<f64> = Some(0.0);
-      let mut refract: Option<f64> = Some(0.0);
-      let mut ior: Option<f64> = Some(1.0);
+      let mut color = Color::black();
+      let mut reflect = 0.0;
+      let mut refract = 0.0;
+      let mut ior = 1.0;
+      let mut roughness = 0.001;
 
       for f in fields {
         if f.0 == "id" {
@@ -168,32 +159,33 @@ fn read_materials(materials: Vec<JsonValue>) -> Vec<Material> {
           }
         } else if f.0 == "color" {
           let values = read_number_triplet(&f.1).unwrap();
-          color = Some(Color {
-            r: values.0,
-            g: values.1,
-            b: values.2,
-          });
+          color = Color::new(values.0, values.1, values.2);
         } else if f.0 == "refract" {
           if let JsonValue::Number(refr) = f.1 {
-            refract = Some(refr);
+            refract = refr;
           }
         } else if f.0 == "reflect" {
           if let JsonValue::Number(refl) = f.1 {
-            reflect = Some(refl);
+            reflect = refl;
           }
         } else if f.0 == "ior" {
           if let JsonValue::Number(iorv) = f.1 {
-            ior = Some(iorv);
+            ior = iorv;
+          }
+        } else if f.0 == "roughness" {
+          if let JsonValue::Number(rgv) = f.1 {
+            roughness = rgv;
           }
         }
       }
 
       result.push(Material {
         id: id.unwrap(),
-        color: color.unwrap(),
-        reflect: reflect.unwrap(),
-        refract: refract.unwrap(),
-        ior: ior.unwrap(),
+        color,
+        reflect,
+        refract,
+        ior,
+        roughness
       });
     }
   }
@@ -267,9 +259,10 @@ fn read_lights(lights: Vec<JsonValue>) -> Vec<Light> {
         g: 1.0,
         b: 1.0,
       };
-      let mut radius = 0.0;
+      let mut radius = 1.0;
       let mut visible = false;
       let mut samples = 1;
+      let mut intensity = 1.0;
 
       for f in fields {
         if f.0 == "type" {
@@ -313,6 +306,10 @@ fn read_lights(lights: Vec<JsonValue>) -> Vec<Light> {
           if let JsonValue::Boolean(b) = f.1 {
             visible = b;
           }
+        } else if f.0 == "intensity" {
+          if let JsonValue::Number(int) = f.1 {
+            intensity = int;
+          }
         }
       }
 
@@ -322,7 +319,8 @@ fn read_lights(lights: Vec<JsonValue>) -> Vec<Light> {
         color,
         visible,
         radius,
-        samples
+        samples,
+        intensity
       });
 
     }
