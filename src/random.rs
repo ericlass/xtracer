@@ -1,4 +1,5 @@
 use linear::Vector4F;
+use rand::Rng;
 
 const PI: f64 = 3.1415926535897932384626433;
 
@@ -13,6 +14,9 @@ impl Random {
 
     //Crete random number in range 0...u32.MAX
     pub fn random (&mut self) -> u32 {
+        rand::thread_rng().gen()
+
+        /*
         let mut x = self.rand_seed;
         x = x ^ (x << 13);
         x = x ^ (x >> 17);
@@ -20,11 +24,13 @@ impl Random {
         self.rand_seed = x;
 
         x
+        */
     }
 
     //Create random number in range 0.0...1.0
     pub fn random_f(&mut self) -> f64 {
-        self.random() as f64 * 2.3283064370807973754314699618685e-10        
+        rand::thread_rng().gen()
+        //self.random() as f64 * 2.3283064370807973754314699618685e-10        
     }
 
     //Creates point on unit sphere centered at (0,0,0) with radius 1.0.

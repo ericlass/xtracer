@@ -5,5 +5,5 @@ authors = ["ericlass"]
 
 [dependencies]
 time = "0.1.40"
-rand = "0.5"
+rand = "0.6"
 num_cpus = "1.8.0"

@@ -61,7 +61,8 @@ pub struct Scene {
   pub spheres: Vec<Sphere>,
   pub meshes: Vec<Mesh>,
   pub lights: Vec<Light>,
-  pub skycolor: Color
+  pub skycolor: Color,
+  pub max_depth: u32
 }
 
 pub struct Output {
@@ -107,6 +108,7 @@ fn read_scene(scene: JsonValue) -> Option<Scene> {
     let mut meshes = Vec::new();
     let mut lights = Vec::new();
     let mut skycolor = Color {r: 0.0, g: 0.0, b: 0.0};
+    let mut max_depth = 5;
 
     for f in fields {
       if f.0 == "skycolor" {
@@ -114,6 +116,11 @@ fn read_scene(scene: JsonValue) -> Option<Scene> {
         skycolor.r = v.0;
         skycolor.g = v.1;
         skycolor.b = v.2;
+      }
+      else if f.0 == "max_trace_depth" {
+        if let JsonValue::Number(md) = f.1 {
+          max_depth = md as u32;
+        }
       }
       else if let JsonValue::Array(values) = f.1 {
         if f.0 == "materials" {
@@ -133,7 +140,8 @@ fn read_scene(scene: JsonValue) -> Option<Scene> {
       spheres,
       meshes,
       lights,
-      skycolor
+      skycolor,
+      max_depth
     });
   }
 

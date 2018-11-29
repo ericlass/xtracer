@@ -213,6 +213,10 @@ fn main() {
 fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Random, depth: u32) -> Color {
     let mut result = Color::black();
 
+    if depth > scene.max_depth {
+        return result;
+    }
+
     let spheres = &scene.spheres;
     let mut closest = None;
     let mut closest_index = 0;
@@ -316,8 +320,24 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                 lcolor.b = lcolor.b + (light.color.b * light_total);
             }
 
-            //Reflection
-            let mut refl_color = Color::black();
+            let path_dir = random.random_point_on_hemisphere(&inter.normal);
+            let path_color = trace(&inter.pos, &path_dir, scene, random, depth + 1);
+
+            /*
+            let diffuse = shade::shade_oren_nayar(&path_dir, &inter.normal, &vdir, mat.roughness, 0.01);
+            let specular = shade::shade_cook_torrance(&path_dir, &vdir, &inter.normal, mat.roughness, 0.01);
+            let shading = diffuse + specular;
+            */
+            let shading = 1.0;
+
+
+            lcolor.r += path_color.r * shading;
+            lcolor.g += path_color.r * shading;
+            lcolor.b += path_color.r * shading;
+
+            //Reflection, temporarily disabled
+            let refl_color = Color::black();
+            /*
             if mat.reflect > 0.0 {
                 let vr = Vector4F::reflect(&vdir.invert(), &inter.normal).normalize();
                 let rc = trace(&inter.pos, &vr, scene, random, depth + 1);
@@ -332,6 +352,7 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                     b: rc.b * f * mat.reflect,
                 };
             }
+            */
 
             //Refraction
             //TODO: Does not work!
