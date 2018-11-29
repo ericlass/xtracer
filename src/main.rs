@@ -68,6 +68,8 @@ fn main() {
     }
 
     let mut stop_watch = StopWatch::new();
+    let mut total_watch = StopWatch::new();
+    total_watch.start();
 
     for sample in 0..samplesi {
         println!("=========================");
@@ -178,7 +180,7 @@ fn main() {
     }
 
     println!("=========================");
-    
+
     stop_watch.start();
     let mut pixels = Vec::with_capacity(((img_w * img_h) * 3) as usize);
     let mut rand = Random::new(97);
@@ -202,6 +204,10 @@ fn main() {
     );
     stop_watch.stop();
     println!("Write time: {}ms", stop_watch.get_millis());
+
+    println!("=========================");
+    total_watch.stop();
+    println!("TOTAL: {}ms", total_watch.get_millis());
 }
 
 fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Random, depth: u32) -> Color {
