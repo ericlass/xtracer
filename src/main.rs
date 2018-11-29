@@ -8,6 +8,7 @@ mod settings;
 mod tga;
 mod shade;
 mod stopwatch;
+mod random;
 
 use linear::Vector4F;
 use settings::Settings;
@@ -20,6 +21,7 @@ use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
 use stopwatch::StopWatch;
+use random::Random;
 
 const HALF_SECOND: u64 = 500000000;
 
@@ -385,50 +387,4 @@ fn convert(v: f64, rand: &mut Random) -> u8 {
     result = result * 255.0;
 
     result.round() as u8
-}
-
-const PI: f64 = 3.1415926535897932384626433;
-
-struct Random {
-    rand_seed: u32
-}
-
-impl Random {
-    pub fn new(seed: u32) -> Random {
-        Random {rand_seed: seed}
-    }
-
-    pub fn random (&mut self) -> u32 {
-        let mut x = self.rand_seed;
-        x = x ^ (x << 13);
-        x = x ^ (x >> 17);
-        x = x ^ (x << 5);
-        self.rand_seed = x;
-
-        x
-    }
-
-    pub fn random_f(&mut self) -> f64 {
-        self.random() as f64 * 2.3283064370807973754314699618685e-10        
-    }
-
-    pub fn random_point_on_sphere(&mut self, pos: &Vector4F, radius: f64) -> Vector4F {
-        let u = self.random_f();
-        let v = self.random_f();
-        let theta = 2.0 * PI * u;
-        let phi = (2.0 * v - 1.0).acos();
-        let sin_phi = phi.sin();
-        let x = pos.x + (radius * sin_phi * theta.cos());
-        let y = pos.y + (radius * sin_phi * theta.sin());
-        let z = pos.z + (radius * phi.cos());
-
-        let result = Vector4F {
-            x,
-            y,
-            z,
-            w: 1.0
-        };
-
-        result
-    }
 }
