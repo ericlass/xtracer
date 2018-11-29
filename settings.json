@@ -5,7 +5,7 @@
     "materials": [
       {
         "id": "mate_red",
-        "color": [1.0, 0.01, 0.0],
+        "color": [1.0, 0.1, 0.1],
         "transparency": 0.0,
         "ior": 1.333,
         "reflect": 0.9,
@@ -21,7 +21,7 @@
       },
       {
         "id": "mate_blue",
-        "color": [0.0, 0.0, 1.0],
+        "color": [0.1, 0.1, 1.0],
         "transparency": 0.0,
         "ior": 1.333,
         "reflect": 0.5,
@@ -58,7 +58,7 @@
       {
         "type": "sphere",
         "position": [-3.0, 2.0, 3.0],
-        "color": [1.0, 1.0, 1.0],
+        "color": [0.7, 0.9, 1.0],
         "radius": 0.5,
         "samples": 8,
         "intensity": 15.0
@@ -66,15 +66,15 @@
       {
         "type": "point",
         "position": [2.0, 2.0, 3.0],
-        "color": [1.0, 1.0, 1.0],
-        "intensity": 3.0
+        "color": [1.0, 0.9, 0.8],
+        "intensity": 5.0
       }
     ]
   },
   "output": {
     "file": "render.tga",
-    "width": 3840,
-    "height": 2160,
-    "samples": 1
+    "width": 1920,
+    "height": 1080,
+    "samples": 32
   }
 }

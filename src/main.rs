@@ -51,133 +51,143 @@ fn main() {
     let img_pix_inc_h = img_plane_w / img_w as f64;
     let img_pix_inc_v = img_plane_h / img_h as f64;
 
-    //Pre-calculate values for multi sampling
-    let samples = settings.output.samples as f64;
-    let samples2 = samples * samples;
-    let sample_width = img_pix_inc_h / samples;
-    let sample_offset = (img_pix_inc_h / 2.0) - (sample_width / 2.0);
-
-    let mut stop_watch = StopWatch::new();
-    stop_watch.start();
-
-    let mut last_time = time::precise_time_ns();
-    let mut lines_done = 0;
-    let mut py = img_plane_b;
+    let samplesi = settings.output.samples;
+    let arc_settings = Arc::new(settings);
+    let arc_cam_pos = Arc::new(cam_pos);
 
     let numcpus = num_cpus::get();
     println!("Number of CPUs: {}", numcpus);
 
-    let mut num_threads = 0;
-    let mut iy = 0;    
-    let arc_settings = Arc::new(settings);
-    let arc_cam_pos = Arc::new(cam_pos);
-    let mut lines = Vec::with_capacity(img_h as usize);
+    let mut lines: Vec<Vec<Color>> = Vec::with_capacity(img_h as usize);
     for _i in 0..img_h {
-        lines.push(Vec::new());
+        let mut line = Vec::with_capacity(img_w as usize);
+        for _j in 0..img_w {
+            line.push(Color::black());
+        }
+        lines.push(line);
     }
 
-    let (tx, rx) = mpsc::channel();
+    let mut stop_watch = StopWatch::new();
 
-    while iy < img_h {
-        while num_threads < numcpus && iy < img_h {
-            let larc_settings = arc_settings.clone();
-            let larc_cam_pos = arc_cam_pos.clone();
-            let ltx = mpsc::Sender::clone(&tx);
-            let liy = iy;
+    for sample in 0..samplesi {
+        println!("=========================");
+        println!("Sample {} of {}", sample + 1, samplesi);
 
-            thread::spawn(move || {
-                let mut random = Random::new(31 + iy);
-                let mut px = img_plane_l;
-                let mut colors = Vec::with_capacity(img_w as usize);
+        stop_watch.start();
 
-                for _ix in 0..img_w {
-                    //Create sample grid of samples * samples sub-pixels
-                    let sub_pix_l = px - sample_offset;
-                    let sub_pix_b = py - sample_offset;
+        let mut last_time = time::precise_time_ns();
+        let mut lines_done = 0;
+        let mut py = img_plane_b;
 
-                    let mut pix_color = Color::black();
+        let mut num_threads = 0;
+        let mut iy = 0;    
+        
+        let (tx, rx) = mpsc::channel();
 
-                    let steps = larc_settings.output.samples;
-                    let mut spy = sub_pix_b;
-                    for _spy in 0..steps  {
-                        let mut spx = sub_pix_l;
-                        for _spx in 0..steps {
-                            let pixel = Vector4F {
-                                x: spx,
-                                y: spy,
-                                z: img_plane_dist,
-                                w: 0.0,
-                            };
+        while iy < img_h {
+            while num_threads < numcpus && iy < img_h {
+                let larc_settings = arc_settings.clone();
+                let larc_cam_pos = arc_cam_pos.clone();
+                let ltx = mpsc::Sender::clone(&tx);
+                let liy = iy;
 
-                            let ray_dir = &pixel - &larc_cam_pos;
-                            let pc = trace(&larc_cam_pos, &ray_dir, &larc_settings.scene, &mut random, 0);
+                thread::spawn(move || {
+                    let mut random = Random::new(31 + sample + iy);
+                    let mut px = img_plane_l;
+                    let mut colors = Vec::with_capacity(img_w as usize);
 
-                            pix_color.r += pc.r;
-                            pix_color.g += pc.g;
-                            pix_color.b += pc.b;
+                    for _ix in 0..img_w {
+                        let spx = px + ((random.random_f() - 0.5) * img_pix_inc_h);
+                        let spy = py + ((random.random_f() - 0.5) * img_pix_inc_v);
 
-                            spx += sample_width;
-                        }
-                        spy += sample_width;
+                        let pixel = Vector4F {
+                            x: spx,
+                            y: spy,
+                            z: img_plane_dist,
+                            w: 0.0,
+                        };
+
+                        let ray_dir = &pixel - &larc_cam_pos;
+                        let pc = trace(&larc_cam_pos, &ray_dir, &larc_settings.scene, &mut random, 0);
+                        colors.push(pc);
+
+                        px += img_pix_inc_h;
                     }
+                        
+                    ltx.send((liy, colors)).unwrap();
+                });
+                
+                num_threads += 1;
+                py += img_pix_inc_v;
+                iy += 1;
+            }
 
-                    pix_color.r = pix_color.r / samples2;
-                    pix_color.g = pix_color.g / samples2;
-                    pix_color.b = pix_color.b / samples2;
-                    colors.push(pix_color);
+            //Read back results from threads
+            let mut rxv = rx.try_recv();
+            while rxv.is_ok() {
+                let result = rxv.unwrap();
+                let line = result.0 as usize;
 
-                    px += img_pix_inc_h;
+                let orig = &mut lines[line];
+                let new = &result.1;
+                for l in 0..new.len() {
+                    let oc = &mut orig[l];
+                    let nc = &new[l];
+
+                    oc.r = oc.r + nc.r;
+                    oc.g = oc.g + nc.g;
+                    oc.b = oc.b + nc.b;
                 }
-                    
-                ltx.send((liy, colors)).unwrap();
-            });
-            
-            num_threads += 1;
-            py += img_pix_inc_v;
-            iy += 1;
+
+                num_threads -= 1;
+                lines_done += 1;
+                rxv = rx.try_recv();
+            }
+
+            let this_time = time::precise_time_ns();
+            let diff = this_time - last_time;
+            if diff > HALF_SECOND {
+                let percent = (lines_done as f64 / img_h as f64) * 100.0;
+                println!("{}%", percent.round());
+                last_time = this_time;
+            }
         }
 
-        //Read back results from threads
-        let mut rxv = rx.try_recv();
-        while rxv.is_ok() {
+        //Read all the rest (blocking)
+        while num_threads > 0 {
+            let rxv = rx.recv();
             let result = rxv.unwrap();
             let line = result.0 as usize;
-            lines[line] = result.1;
+            
+            let orig = &mut lines[line];
+            let new = &result.1;
+            for l in 0..new.len() {
+                let oc = &mut orig[l];
+                let nc = &new[l];
+
+                oc.r = oc.r + nc.r;
+                oc.g = oc.g + nc.g;
+                oc.b = oc.b + nc.b;
+            }
+
             num_threads -= 1;
-            lines_done += 1;
-            rxv = rx.try_recv();
         }
 
-        let this_time = time::precise_time_ns();
-        let diff = this_time - last_time;
-        if diff > HALF_SECOND {
-            let percent = (lines_done as f64 / img_h as f64) * 100.0;
-            println!("{}%", percent.round());
-            last_time = this_time;
-        }
+        stop_watch.stop();
+        println!("Render time: {}ms", stop_watch.get_millis());
     }
 
-    //Read all the rest (blocking)
-    while num_threads > 0 {
-        let rxv = rx.recv();
-        let result = rxv.unwrap();
-        let line = result.0;
-        let colors = result.1;
-        lines[line as usize] = colors;
-        num_threads -= 1;
-    }
-
-    stop_watch.stop();
-    println!("Render time: {}ms", stop_watch.get_millis());
-
+    println!("=========================");
+    
     stop_watch.start();
     let mut pixels = Vec::with_capacity(((img_w * img_h) * 3) as usize);
     let mut rand = Random::new(97);
+    let samplef = (samplesi + 1) as f64;
     for line in &lines {
         for col in line {
-            pixels.push(convert(col.b, &mut rand));
-            pixels.push(convert(col.g, &mut rand));
-            pixels.push(convert(col.r, &mut rand));
+            pixels.push(convert(col.b / samplef, &mut rand));
+            pixels.push(convert(col.g / samplef, &mut rand));
+            pixels.push(convert(col.r / samplef, &mut rand));
         }
     }    
     stop_watch.stop();
