@@ -1,3 +1,6 @@
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result;
 use json::JsonValue;
 use linear::Vector4F;
 use linear::Vertex4F;
@@ -15,6 +18,12 @@ impl Color {
 
   pub fn black() -> Color {
     Color {r: 0.0, g: 0.0, b: 0.0}
+  }
+}
+
+impl Display for Color {
+  fn fmt(&self, f: &mut Formatter) -> Result {
+    write!(f, "[{},{},{}]", self.r, self.g, self.b)
   }
 }
 

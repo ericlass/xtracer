@@ -71,6 +71,8 @@ fn main() {
     let mut total_watch = StopWatch::new();
     total_watch.start();
 
+    let mut fulltime = 0.0;
+
     for sample in 0..samplesi {
         println!("=========================");
         println!("Sample {} of {}", sample + 1, samplesi);
@@ -177,6 +179,12 @@ fn main() {
 
         stop_watch.stop();
         println!("Render time: {}ms", stop_watch.get_millis());
+
+        //Calculate and show ETA
+        fulltime += stop_watch.get_millis();
+        let average_per_sample = fulltime / (sample as f64);
+        let time_left = (samplesi - sample) as f64 * average_per_sample;
+        println!("ETA: {}s", time_left as u32 / 1000);
     }
 
     println!("=========================");
@@ -313,24 +321,20 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                 let diffuse = shade::shade_oren_nayar(&ldir, &inter.normal, &vdir, mat.roughness, 0.01);
                 let specular = shade::shade_cook_torrance(&ldir, &vdir, &inter.normal, mat.roughness, 0.01);
                 let shading = diffuse + specular;
-
+                
                 let light_total = shading * light_intens;
                 lcolor.r = lcolor.r + (light.color.r * light_total);
                 lcolor.g = lcolor.g + (light.color.g * light_total);
                 lcolor.b = lcolor.b + (light.color.b * light_total);
             }
 
-            let path_dir = random.random_point_on_hemisphere(&inter.normal);
+            let path_dir = random.random_point_on_hemisphere(&inter.normal).normalize();
             let path_color = trace(&inter.pos, &path_dir, scene, random, depth + 1);
 
-            /*
             let diffuse = shade::shade_oren_nayar(&path_dir, &inter.normal, &vdir, mat.roughness, 0.01);
             let specular = shade::shade_cook_torrance(&path_dir, &vdir, &inter.normal, mat.roughness, 0.01);
             let shading = diffuse + specular;
-            */
-            let shading = 1.0;
-
-
+            
             lcolor.r += path_color.r * shading;
             lcolor.g += path_color.r * shading;
             lcolor.b += path_color.r * shading;
@@ -370,9 +374,16 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
             }
             */
 
-            result.r = (mat.color.r * lcolor.r) + refl_color.r;
-            result.g = (mat.color.g * lcolor.g) + refl_color.g;
-            result.b = (mat.color.b * lcolor.b) + refl_color.b;
+            /*if depth == 0 {
+                result.r = path_color.r;
+                result.g = path_color.g;
+                result.b = path_color.b;
+            }
+            else {*/
+                result.r = (mat.color.r * lcolor.r) + refl_color.r;
+                result.g = (mat.color.g * lcolor.g) + refl_color.g;
+                result.b = (mat.color.b * lcolor.b) + refl_color.b;
+            //}
         } else {
             //If no material could be found, color is black
             result.r = 0.0;
