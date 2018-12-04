@@ -9,15 +9,15 @@
         "transparency": 0.0,
         "ior": 1.333,
         "reflect": 0.9,
-        "roughness": 0.01
+        "roughness": 0.25
       },
       {
         "id": "mate_grey",
-        "color": [0.5, 0.5, 0.5],
+        "color": [0.9, 0.9, 0.9],
         "transparency": 0.0,
         "ior": 1.333,
         "reflect": 0.5,
-        "roughness": 0.9
+        "roughness": 0.5
       },
       {
         "id": "mate_blue",
@@ -25,7 +25,7 @@
         "transparency": 0.0,
         "ior": 1.333,
         "reflect": 0.5,
-        "roughness": 0.9
+        "roughness": 0.5
       },
       {
         "id": "mate_green",
@@ -33,25 +33,10 @@
         "transparency": 0.0,
         "ior": 1.333,
         "reflect": 0.5,
-        "roughness": 0.9
+        "roughness": 0.5
       }
     ],
     "spheres": [
-      {
-        "center": [0.6, 0.0, 5.0],
-        "radius": 0.4,
-        "material": "mate_blue"
-      },
-      {
-        "center": [-0.6, 0.0, 5.0],
-        "radius": 0.4,
-        "material": "mate_green"
-      },
-      {
-        "center": [0.0, -0.2, 5.0],
-        "radius": 0.2,
-        "material": "mate_red"
-      },
       {
         "center": [0.0, -1000.4, 5.0],
         "radius": 1000.0,
@@ -61,8 +46,8 @@
     "meshes": [
       {
         "file": "cube.obj",
-        "translation": [0.0, 0.0, 0.0],
-        "scale": [1.0, 1.0, 1.0],
+        "translation": [0.0, 0.0, 3.0],
+        "scale": [0.0015, 0.0015, 0.0015],
         "rotation": [0.0, 0.0, 0.0],
         "material": "mate_red"
       }
@@ -70,9 +55,9 @@
     "lights": [
       {
         "type": "point",
-        "position": [2.0, 2.0, 3.0],
-        "color": [1.0, 0.9, 0.8],
-        "intensity": 11.0
+        "position": [2.0, 2.0, 1.0],
+        "color": [0.6, 0.8, 0.9],
+        "intensity": 16.0
       }
     ]
   },
@@ -80,6 +65,6 @@
     "file": "render.tga",
     "width": 1280,
     "height": 720,
-    "samples": 1024
+    "samples": 32
   }
 }

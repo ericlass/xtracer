@@ -4,11 +4,12 @@ extern crate num_cpus;
 
 mod json;
 mod linear;
+mod obj;
+mod random;
 mod settings;
-mod tga;
 mod shade;
 mod stopwatch;
-mod random;
+mod tga;
 
 use linear::Vector4F;
 use settings::Settings;
@@ -182,7 +183,7 @@ fn main() {
 
         //Calculate and show ETA
         fulltime += stop_watch.get_millis();
-        let average_per_sample = fulltime / (sample as f64);
+        let average_per_sample = fulltime / ((sample + 1) as f64);
         let time_left = (samplesi - sample) as f64 * average_per_sample;
         println!("ETA: {}s", time_left as u32 / 1000);
     }
@@ -226,8 +227,11 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
     }
 
     let spheres = &scene.spheres;
+    let meshes = &scene.meshes;
+
     let mut closest = None;
-    let mut closest_index = 0;
+    let mut closest_sp_index: i32 = -1;
+    let mut closest_mesh_index: i32 = -1;
     let mut min_t = 9999999999.99;
 
     for i in 0..spheres.len() {
@@ -247,19 +251,53 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
             if inter.ray_t < min_t {
                 min_t = inter.ray_t;
                 closest = Some(inter);
-                closest_index = i;
+                closest_sp_index = i as i32;
+            }
+        }
+    }
+
+    for i in 0..meshes.len() {
+        let mesh = &meshes[i];
+
+        for tri in &mesh.triangles {
+            let intersection = linear::intersect_ray_triangle(
+                &ray_org,
+                &ray_dir,
+                &tri.v1,
+                &tri.v2,
+                &tri.v3,
+                min_t
+            );
+
+            if intersection.is_some() {
+                let inter = intersection.unwrap();
+                if inter.ray_t < min_t {
+                    min_t = inter.ray_t;
+                    closest = Some(inter);
+                    closest_mesh_index = i as i32;
+                    closest_sp_index = -1;
+                }
             }
         }
     }
 
     if closest.is_some() {
-        let sp = &spheres[closest_index];
         let inter = closest.unwrap();
         let vdir = (ray_org - &inter.pos).normalize();
 
+        let mut mat_name = String::from("");
+        if closest_sp_index >= 0 {
+            let sp = &spheres[closest_sp_index as usize];
+            mat_name = sp.material.clone();
+        }
+        else if closest_mesh_index >= 0 {
+            let mesh = &meshes[closest_mesh_index as usize];
+            mat_name = mesh.material.clone();
+        }        
+
         let mut material = None;
         for mat in &scene.materials {
-            if mat.id == sp.material {
+            if mat.id == mat_name {
                 material = Some(mat);
                 break;
             }
@@ -277,7 +315,7 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                     let mut is_in_shadow = false;
 
                     for l in 0..spheres.len() {
-                        if l != closest_index {
+                        if l != closest_sp_index as usize {
                             let ssp = &spheres[l];
                             if linear::ray_intersects_sphere(&inter.pos, &ldir, &ssp.center, ssp.radius) {
                                 is_in_shadow = true;
@@ -286,6 +324,15 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                         }
                     }
 
+                    for m in meshes {
+                        for t in &m.triangles {
+                            if linear::ray_intersects_triangle(&inter.pos, &ldir, &t.v1, &t.v2, &t.v3) {
+                                is_in_shadow = true;
+                                break;
+                            }
+                        }
+                    }
+                    
                     light_intens = if is_in_shadow {0.0} else {1.0};
                 }
                 else if let LightType::Sphere = light.ltype {
@@ -296,9 +343,18 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                         let sample_dir = &rand_pos - &inter.pos;
                         let mut is_in_shadow = false;
                         for l in 0..spheres.len() {
-                            if l != closest_index {
+                            if l != closest_sp_index as usize {
                                 let ssp = &spheres[l];
                                 if linear::ray_intersects_sphere(&inter.pos, &sample_dir, &ssp.center, ssp.radius) {
+                                    is_in_shadow = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        for m in meshes {
+                            for t in &m.triangles {
+                                if linear::ray_intersects_triangle(&inter.pos, &sample_dir, &t.v1, &t.v2, &t.v3) {
                                     is_in_shadow = true;
                                     break;
                                 }
@@ -317,7 +373,7 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                 let ldist = (&light.position - &inter.pos).len();
                 let ratio = light.radius / ldist;
                 light_intens = (ratio * ratio) * light_intens * light.intensity;
-
+                
                 let diffuse = shade::shade_oren_nayar(&ldir, &inter.normal, &vdir, mat.roughness, 0.01);
                 let specular = shade::shade_cook_torrance(&ldir, &vdir, &inter.normal, mat.roughness, 0.01);
                 let shading = diffuse + specular;
@@ -330,7 +386,7 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
 
             let path_dir = random.random_point_on_hemisphere(&inter.normal).normalize();
             let path_color = trace(&inter.pos, &path_dir, scene, random, depth + 1);
-
+            
             let diffuse = shade::shade_oren_nayar(&path_dir, &inter.normal, &vdir, mat.roughness, 0.01);
             let specular = shade::shade_cook_torrance(&path_dir, &vdir, &inter.normal, mat.roughness, 0.01);
             let shading = diffuse + specular;
@@ -339,53 +395,21 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
             lcolor.g += path_color.r * shading;
             lcolor.b += path_color.r * shading;
 
-            //Reflection, temporarily disabled
-            let refl_color = Color::black();
-            /*
-            if mat.reflect > 0.0 {
-                let vr = Vector4F::reflect(&vdir.invert(), &inter.normal).normalize();
-                let rc = trace(&inter.pos, &vr, scene, random, depth + 1);
-
-                //Reflection fresnel (Schlick)
-                let vdotn = Vector4F::dot(&vdir, &inter.normal);
-                let f = (1.0 - vdotn).powf(mat.ior);
-
-                refl_color = Color {
-                    r: rc.r * f * mat.reflect,
-                    g: rc.g * f * mat.reflect,
-                    b: rc.b * f * mat.reflect,
-                };
-            }
-            */
-
-            //Refraction
-            //TODO: Does not work!
-            /*
-            let mut refr_color = Color::black();
-            if mat.refract > 0.0 {
-                let vr = Vector4F::refract(&vdir, &inter.normal, mat.ior).normalize();
-                let rc = trace(&inter.pos, &vr, scene, random, depth + 1);
-
-                refr_color = Color {
-                    r: rc.r * mat.refract,
-                    g: rc.g * mat.refract,
-                    b: rc.b * mat.refract,
-                };
-            }
-            */
-
+            //Enabling this only show GI
             /*if depth == 0 {
                 result.r = path_color.r;
                 result.g = path_color.g;
                 result.b = path_color.b;
             }
             else {*/
-                result.r = (mat.color.r * lcolor.r) + refl_color.r;
-                result.g = (mat.color.g * lcolor.g) + refl_color.g;
-                result.b = (mat.color.b * lcolor.b) + refl_color.b;
+                result.r = mat.color.r * lcolor.r;
+                result.g = mat.color.g * lcolor.g;
+                result.b = mat.color.b * lcolor.b;
             //}
         } else {
             //If no material could be found, color is black
+            println!("Material not found: {}", mat_name);
+
             result.r = 0.0;
             result.g = 0.0;
             result.b = 0.0;

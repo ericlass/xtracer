@@ -4,6 +4,7 @@ use std::fmt::Result;
 use json::JsonValue;
 use linear::Vector4F;
 use linear::Vertex4F;
+use obj;
 
 pub struct Color {
   pub r: f64,
@@ -42,8 +43,14 @@ pub struct Sphere {
   pub material: String,
 }
 
+pub struct Triangle {
+  pub v1: Vertex4F,
+  pub v2: Vertex4F,
+  pub v3: Vertex4F,
+}
+
 pub struct Mesh {
-  pub vertices: Vec<Vertex4F>,
+  pub triangles: Vec<Triangle>,
   pub translation: Vector4F,
   pub rotation: Vector4F,
   pub scale: Vector4F,
@@ -256,7 +263,96 @@ fn read_spheres(spheres: Vec<JsonValue>) -> Vec<Sphere> {
 }
 
 fn read_meshes(meshes: Vec<JsonValue>) -> Vec<Mesh> {
-  Vec::new()
+  let mut result = Vec::new();
+
+  for mesh in meshes {
+    if let JsonValue::Object(fields) = mesh {
+      let mut vertices = Vec::new();
+      let mut translation = Vector4F::null();
+      let mut rotation = Vector4F::null();
+      let mut scale = Vector4F::new(1.0, 1.0, 1.0);
+      let mut material = String::new();
+
+      for f in fields {
+        if f.0 == "file" {
+          if let JsonValue::String(s) = f.1 {
+            println!("Loading mesh: '{}'", s);
+            vertices = obj::load_obj(s.as_str());
+            println!("Loaded {} vertices, {} triangles", vertices.len(), vertices.len() / 3);
+          }
+        }
+        else if f.0 == "translation" {
+          let values = read_number_triplet(&f.1).unwrap();
+          translation = Vector4F {
+            x: values.0,
+            y: values.1,
+            z: values.2,
+            w: 1.0,
+          };
+        }
+        else if f.0 == "scale" {
+          let values = read_number_triplet(&f.1).unwrap();
+          scale = Vector4F {
+            x: values.0,
+            y: values.1,
+            z: values.2,
+            w: 1.0,
+          };
+        }
+        else if f.0 == "rotation" {
+          let values = read_number_triplet(&f.1).unwrap();
+          rotation = Vector4F {
+            x: values.0,
+            y: values.1,
+            z: values.2,
+            w: 1.0,
+          };
+        }
+        else if f.0 == "material" {
+          if let JsonValue::String(s) = f.1 {
+            material = s;
+          }
+        }
+      }
+
+      //Apply transform
+      for vert in &mut vertices {
+        let new_pos = vert.pos.rotate_x(rotation.x).rotate_y(rotation.y).rotate_z(rotation.z);
+        vert.pos = &(&new_pos * &scale) + &translation;
+      }
+
+      let triangles = create_triangles(&mut vertices);
+
+      let mut m = Mesh {
+        triangles,
+        translation,
+        rotation,
+        scale,
+        material
+      };
+
+      result.push(m);
+    }
+  }
+
+  result
+}
+
+fn create_triangles(verts: &mut Vec<Vertex4F>) -> Vec<Triangle> {
+  let num_tris = verts.len() / 3;
+  let mut result = Vec::with_capacity(num_tris);
+
+  for _i in 0..num_tris {
+    result.push(
+      Triangle {
+        v1: verts.remove(0),
+        v2: verts.remove(0),
+        v3: verts.remove(0)
+      }
+    );
+  }
+
+  result
 }
 
 fn read_lights(lights: Vec<JsonValue>) -> Vec<Light> {

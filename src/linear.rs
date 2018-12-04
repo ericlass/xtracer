@@ -4,6 +4,10 @@ use std::fmt::Formatter;
 use std::fmt::Result;
 use std::ops::Add;
 use std::ops::Sub;
+use std::ops::Mul;
+use settings::Color;
+
+const PI: f64 = 3.1415926535897932384626433;
 
 #[repr(C, packed)]
 pub struct Vector4F {
@@ -14,6 +18,15 @@ pub struct Vector4F {
 }
 
 impl Vector4F {
+  pub fn new(x: f64, y: f64, z: f64) -> Vector4F {
+    Vector4F{
+      x,
+      y,
+      z,
+      w: 1.0,
+    }
+  }
+
   pub fn null() -> Vector4F {
     Vector4F{
       x: 0.0,
@@ -133,12 +146,60 @@ impl Vector4F {
     }
   }
 
+  pub fn rotate_x(&self, angle: f64) -> Vector4F {
+    let rads = (angle / 180.0) * PI;
+    let sin = rads.sin();
+    let cos = rads.cos();
+    
+    Vector4F {
+      x: self.x,
+      y: self.y * cos - self.z * sin,
+      z: self.z * cos + self.y * sin,
+      w: self.w
+    }
+  }
+
+  pub fn rotate_y(&self, angle: f64) -> Vector4F {
+    let rads = (angle / 180.0) * PI;
+    let sin = rads.sin();
+    let cos = rads.cos();
+    
+    Vector4F {
+      x: self.x * cos - self.z * sin,
+      y: self.y,
+      z: self.z * cos + self.x * sin,
+      w: self.w
+    }
+  }
+
+  pub fn rotate_z(&self, angle: f64) -> Vector4F {
+    let rads = (angle / 180.0) * PI;
+    let sin = rads.sin();
+    let cos = rads.cos();
+    
+    Vector4F {
+      x: self.x * cos - self.y * sin,
+      y: self.y * cos + self.x * sin,
+      z: self.z,
+      w: self.w
+    }
+  }
+
   pub fn len(&self) -> f64 {
     self.sqr_len().sqrt()
   }
 
   pub fn sqr_len(&self) -> f64 {
     (self.x * self.x + self.y * self.y + self.z * self.z)
+  }
+
+  pub fn clone(&self) -> Vector4F {
+    Vector4F {
+      x: self.x,
+      y: self.y,
+      z: self.z,
+      w: self.w
+    }
   }
 }
 
@@ -204,6 +265,32 @@ impl<'a, 'b> Sub<&'b Vector4F> for &'a Vector4F {
   }
 }
 
+impl Mul for Vector4F {
+  type Output = Vector4F;
+
+  fn mul(self, other: Vector4F) -> Vector4F {
+    Vector4F{
+      x: self.x * other.x,
+      y: self.y * other.y,
+      z: self.z * other.z,
+      w: self.w * other.w,
+    }
+  }
+}
+
+impl<'a, 'b> Mul<&'b Vector4F> for &'a Vector4F {
+  type Output = Vector4F;
+
+  fn mul(self, other: &'b Vector4F) -> Vector4F {
+    Vector4F{
+      x: self.x * other.x,
+      y: self.y * other.y,
+      z: self.z * other.z,
+      w: self.w * other.w,
+    }
+  }
+}
+
 impl PartialEq for Vector4F {
   fn eq(&self, other: &Vector4F) -> bool {
     self.x == other.x &&
@@ -215,12 +302,24 @@ impl PartialEq for Vector4F {
 
 //############################# VERTEX #############################
 
-#[repr(C, packed)]
 pub struct Vertex4F {
   pub pos: Vector4F,
   pub normal: Vector4F,
-  pub tex: Vector4F,
-  pub color: Vector4F
+  pub tex_u: f64,
+  pub tex_v: f64,
+  pub color: Color
+}
+
+impl Vertex4F {
+  pub fn new() -> Vertex4F {
+    Vertex4F {
+      pos: Vector4F::null(),
+      normal: Vector4F::null(),
+      tex_u: 0.0,
+      tex_v: 0.0,
+      color: Color::black()
+    }
+  }
 }
 
 //############################# INTERSECTIONS #############################
@@ -237,163 +336,10 @@ struct PluckerCoords {
 pub struct Intersection {
   pub pos: Vector4F,
   pub normal: Vector4F,
-  pub tex: Vector4F,
+  pub tex_u: f64,
+  pub tex_v: f64,
   pub barycentric: Vector4F,
   pub ray_t: f64
-}
-
-fn plucker(start: &Vector4F, end: &Vector4F) -> PluckerCoords {
-  PluckerCoords {
-    p0: start.x * end.y - end.x * start.y,
-    p1: start.x * end.z - end.x * start.z,
-    p2: start.x - end.x,
-    p3: start.y * end.z - end.y * start.z,
-    p4: start.z - end.z,
-    p5: end.y - start.y
-  }
-}
-
-fn side(a: &PluckerCoords, b: &PluckerCoords) -> f64 {
-  a.p0 * b.p4 + a.p1 * b.p5 + a.p2 * b.p3 + a.p3 * b.p2 + a.p4 * b.p0 + a.p5 * b.p1
-}
-
-struct SideProducts {
-  s1: f64,
-  s2: f64,
-  s3: f64
-}
-
-// Calculates side products of ray and triangle.
-//
-// rorg: ray origin
-// rdir: ray direction, scaled by ray length
-// t1: first point of triangle
-// t2: second point of triangle
-// t3: third point of triangle
-fn ray_triangle_side_products(rorg: &Vector4F, rdir: &Vector4F, t1: &Vertex4F, t2: &Vertex4F, t3: &Vertex4F) -> SideProducts {
-  let ta = &t1.pos;
-  let tb = &t2.pos;
-  let tc = &t3.pos;
-
-  let tab = &plucker(ta, tb);
-
-  //Calculate barycentric coordinates
-  let raypluck = &plucker(rorg, rdir);
-  let tbc = &plucker(tb, tc);
-  let tca = &plucker(tc, ta);
-
-  let s1 = side(raypluck, tab);
-  let s2 = side(raypluck, tbc);
-  let s3 = side(raypluck, tca);
-
-  SideProducts {
-    s1,
-    s2,
-    s3
-  }
-}
-
-const EPS: f64 = 0.0000001;
-const NEPS: f64 = -0.0000001;
-
-// Checks if ray intersects with triangle using plucker coordinates. Does not provide additional information about the intersection, onyl if it
-// intersects or not. If you required more information, like intersection point, normal... use "intersect_ray_triangle" instead.
-//
-// rorg: ray origin
-// rdir: ray direction, scaled by ray length
-// t1: first point of triangle
-// t2: second point of triangle
-// t3: third point of triangle
-pub fn ray_intersects_triangle(rorg: &Vector4F, rdir: &Vector4F, t1: &Vertex4F, t2: &Vertex4F, t3: &Vertex4F) -> bool {
-  let sides = ray_triangle_side_products(rorg, rdir, t1, t2, t3);
-
-  let s1 = sides.s1;
-  let s2 = sides.s2;
-  let s3 = sides.s3;
-
-  (s1 > NEPS && s2 > NEPS && s3 > NEPS) || (s1 < EPS && s2 < EPS && s3 < EPS)
-}
-
-// Intersects ray with triangle using plucker coordinates and returns all kinds of intersection information, which takes some time to compute.
-// Use ray_intersects_triangle if you only need to to know if the ray intersects the triangle or not.
-//
-// rorg: ray origin
-// rdir: ray direction, scaled by ray length
-// t1: first point of triangle
-// t2: second point of triangle
-// t3: third point of triangle
-// mint_t: minimum T value of ray. If intersection is bigger than this None is returned
-pub fn intersect_ray_triangle(rorg: &Vector4F, rdir: &Vector4F, t1: &Vertex4F, t2: &Vertex4F, t3: &Vertex4F, min_t: f64) -> Option<Intersection> {
-  let ta = &t1.pos;
-  let tb = &t2.pos;
-  let tc = &t3.pos;
-
-  let sides = ray_triangle_side_products(rorg, rdir, t1, t2, t3);
-
-  let mut s1 = sides.s1;
-  let mut s2 = sides.s2;
-  let mut s3 = sides.s3;
-
-  if (s1 > NEPS && s2 > NEPS && s3 > NEPS) || (s1 < EPS && s2 < EPS && s3 < EPS) {
-    //Side products are proportional to the signed area
-    //of the barycentric triangles. So scale them to sum
-    //up to 1 to get barycentric coordinates.
-    let sum = s1 + s2 + s3;
-    s1 /= sum; //Barycentric C
-    s2 /= sum; //Barycentric A
-    s3 /= sum; //Barycentric B
-
-    // Calculate using barycentric coordinated because t value is not correct. This is even faster!
-    let point = Vector4F {
-      x: ta.x * s2 + tb.x * s3 + tc.x * s1,
-      y: ta.y * s2 + tb.y * s3 + tc.y * s1,
-      z: ta.z * s2 + tb.z * s3 + tc.z * s1,
-      w: 1.0
-    };
-
-    let real_t = (&point - rorg).sqr_len() / rdir.sqr_len();
-
-    if real_t > min_t {
-      return None;
-    }
-
-    //Interpolate normal
-    let na = &t1.normal;
-    let nb = &t2.normal;
-    let nc = &t3.normal;
-
-    let normal = Vector4F {
-      x: na.x * s2 + nb.x * s3 + nc.x * s1,
-      y: na.y * s2 + nb.y * s3 + nc.y * s1,
-      z: na.z * s2 + nb.z * s3 + nc.z * s1,
-      w: 1.0
-    };
-
-    //Interpolate texture coordinates
-    let ta = &t1.tex;
-    let tb = &t2.tex;
-    let tc = &t3.tex;
-
-    let tex = Vector4F {
-      x: ta.x * s2 + tb.x * s3 + tc.x * s1,
-      y: ta.y * s2 + tb.y * s3 + tc.y * s1,
-      z: ta.z * s2 + tb.z * s3 + tc.z * s1,
-      w: 1.0
-    };
-
-    //Fill other intersection info
-    let result = Intersection {
-      pos: point,
-      normal: normal,
-      tex: tex,
-      barycentric: Vector4F {x: s2, y: s3, z: s1, w: 1.0},
-      ray_t: real_t
-    };
-
-    return Some(result);
-  }
-
-  return None;
 }
 
 pub fn ray_intersects_sphere(p0: &Vector4F, d: &Vector4F, c: &Vector4F, r: f64) -> bool {
@@ -452,10 +398,257 @@ pub fn intersect_ray_sphere(p0: &Vector4F, d: &Vector4F, c: &Vector4F, r: f64, m
   let result = Intersection {
     pos: point,
     normal: normal,
-    tex: Vector4F { x: 0.0, y: 0.0, z: 0.0, w: 1.0 },
+    tex_u: 0.0,
+    tex_v: 0.0,
     barycentric: Vector4F { x: 0.0, y: 0.0, z: 0.0, w: 1.0 },
     ray_t: t
   };
 
   Some(result)
+}
+
+pub fn intersect_ray_triangle(rorg: &Vector4F, rdir: &Vector4F, t0: &Vertex4F, t1: &Vertex4F, t2: &Vertex4F, min_t: f64) -> Option<Intersection> {
+  let p0 = &t0.pos;
+  let p1 = &t1.pos;
+  let p2 = &t2.pos;
+
+  let e1 = p1 - p0;
+  let e2 = p2 - p1;
+  let n = Vector4F::cross(&e1, &e2);
+  let dot = Vector4F::dot(&n, rdir);
+
+  if !(dot < 0.0) {
+    return None;
+  }
+
+  let d = Vector4F::dot(&n, &p0);
+  let mut t = d - Vector4F::dot(&n, rorg);
+
+  if !(t <= 0.0) {
+    return None;
+  }
+
+  if !(t >= dot * min_t) {
+    return None;
+  }
+
+  t = t / dot;
+  
+  assert!(t >= 0.0);
+  //assert!(t <= min_t);
+
+  let p = Vector4F {
+    x: rorg.x + (rdir.x * t),
+    y: rorg.y + (rdir.y * t),
+    z: rorg.z + (rdir.z * t),
+    w: 1.0
+  };
+
+  let u0;
+  let u1;
+  let u2;
+
+  let v0;
+  let v1;
+  let v2;
+
+  let absx = n.x.abs();
+  let absy = n.y.abs();
+  let absz = n.z.abs();
+
+  if absx > absy {
+    if absx > absz {
+      u0 = p.y - p0.y;
+      u1 = p1.y - p0.y;
+      u2 = p2.y - p0.y;
+
+      v0 = p.z - p0.z;
+      v1 = p1.z - p0.z;
+      v2 = p2.z - p0.z;
+    }
+    else {
+      u0 = p.x - p0.x;
+      u1 = p1.x - p0.x;
+      u2 = p2.x - p0.x;
+
+      v0 = p.y - p0.y;
+      v1 = p1.y - p0.y;
+      v2 = p2.y - p0.y;
+    }
+  }
+  else {
+    if absy > absz {
+      u0 = p.x - p0.x;
+      u1 = p1.x - p0.x;
+      u2 = p2.x - p0.x;
+
+      v0 = p.z - p0.z;
+      v1 = p1.z - p0.z;
+      v2 = p2.z - p0.z;
+    }
+    else {
+      u0 = p.x - p0.x;
+      u1 = p1.x - p0.x;
+      u2 = p2.x - p0.x;
+
+      v0 = p.y - p0.y;
+      v1 = p1.y - p0.y;
+      v2 = p2.y - p0.y;
+    }
+  }
+
+  let mut temp = u1 * v2 - v1 * u2;
+
+  if !(temp != 0.0) {
+    return None;
+  }
+
+  temp = 1.0 / temp;
+
+  let alpha = (u0 * v2 - v0 * u2) * temp;
+  if !(alpha >= 0.0) {
+    return None;
+  }
+
+  let beta = (u1 * v0 - v1 * u0) * temp;
+  if !(beta >= 0.0) {
+    return None;
+  }
+
+  let gamma = 1.0 - alpha - beta;
+  if !(gamma >= 0.0) {
+    return None;
+  }
+
+  let n0 = &t0.normal;
+  let n1 = &t0.normal;
+  let n2 = &t0.normal;
+
+  let normal = Vector4F {
+    x: n0.x * alpha + n1.x * beta + n2.x * gamma,
+    y: n0.y * alpha + n1.y * beta + n2.y * gamma,
+    z: n0.z * alpha + n1.z * beta + n2.z * gamma,
+    w: 1.0
+  };
+
+  let result = Intersection {
+    pos: p,
+    normal: normal.normalize(),
+    tex_u: 0.0,
+    tex_v: 0.0,
+    barycentric: Vector4F::new(alpha, beta, gamma),
+    ray_t: t
+  };
+
+  Some(result)
+}
+
+pub fn ray_intersects_triangle(rorg: &Vector4F, rdir: &Vector4F, t0: &Vertex4F, t1: &Vertex4F, t2: &Vertex4F) -> bool {
+  let p0 = &t0.pos;
+  let p1 = &t1.pos;
+  let p2 = &t2.pos;
+
+  let e1 = p1 - p0;
+  let e2 = p2 - p1;
+  let n = Vector4F::cross(&e1, &e2);
+  let dot = Vector4F::dot(&n, rdir);
+
+  if !(dot < 0.0) {
+    return false;
+  }
+
+  let d = Vector4F::dot(&n, &p0);
+  let mut t = d - Vector4F::dot(&n, rorg);
+
+  if !(t <= 0.0) {
+    return false;
+  }
+
+  t = t / dot;
+  assert!(t >= 0.0);
+
+  let p = Vector4F {
+    x: rorg.x + (rdir.x * t),
+    y: rorg.y + (rdir.y * t),
+    z: rorg.z + (rdir.z * t),
+    w: 1.0
+  };
+
+  let u0;
+  let u1;
+  let u2;
+
+  let v0;
+  let v1;
+  let v2;
+
+  let absx = n.x.abs();
+  let absy = n.y.abs();
+  let absz = n.z.abs();
+
+  if absx > absy {
+    if absx > absz {
+      u0 = p.y - p0.y;
+      u1 = p1.y - p0.y;
+      u2 = p2.y - p0.y;
+
+      v0 = p.z - p0.z;
+      v1 = p1.z - p0.z;
+      v2 = p2.z - p0.z;
+    }
+    else {
+      u0 = p.x - p0.x;
+      u1 = p1.x - p0.x;
+      u2 = p2.x - p0.x;
+
+      v0 = p.y - p0.y;
+      v1 = p1.y - p0.y;
+      v2 = p2.y - p0.y;
+    }
+  }
+  else {
+    if absy > absz {
+      u0 = p.x - p0.x;
+      u1 = p1.x - p0.x;
+      u2 = p2.x - p0.x;
+
+      v0 = p.z - p0.z;
+      v1 = p1.z - p0.z;
+      v2 = p2.z - p0.z;
+    }
+    else {
+      u0 = p.x - p0.x;
+      u1 = p1.x - p0.x;
+      u2 = p2.x - p0.x;
+
+      v0 = p.y - p0.y;
+      v1 = p1.y - p0.y;
+      v2 = p2.y - p0.y;
+    }
+  }
+
+  let mut temp = u1 * v2 - v1 * u2;
+
+  if !(temp != 0.0) {
+    return false;
+  }
+
+  temp = 1.0 / temp;
+
+  let alpha = (u0 * v2 - v0 * u2) * temp;
+  if !(alpha >= 0.0) {
+    return false;
+  }
+
+  let beta = (u1 * v0 - v1 * u0) * temp;
+  if !(beta >= 0.0) {
+    return false;
+  }
+
+  let gamma = 1.0 - alpha - beta;
+  if !(gamma >= 0.0) {
+    return false;
+  }
+
+  true
 }
