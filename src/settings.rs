@@ -2,9 +2,13 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::fmt::Result;
 use json::JsonValue;
+use linear;
 use linear::Vector4F;
 use linear::Vertex4F;
+use linear::Intersection;
 use obj;
+use octree;
+use octree::OctreeNode;
 
 pub struct Color {
   pub r: f64,
@@ -37,10 +41,25 @@ pub struct Material {
   pub roughness: f64
 }
 
+pub trait Intersectable {
+  fn intersect(&self, rorg: &Vector4F, rdir: &Vector4F, min_t: f64) -> Option<Intersection>;
+  fn material(&self) -> String;
+}
+
 pub struct Sphere {
   pub center: Vector4F,
   pub radius: f64,
   pub material: String,
+}
+
+impl Intersectable for Sphere {
+  fn intersect(&self, rorg: &Vector4F, rdir: &Vector4F, min_t: f64) -> Option<Intersection> {
+    linear::intersect_ray_sphere(rorg, rdir, &self.center, self.radius, min_t)
+  }
+
+  fn material(&self) -> String {
+    self.material.clone()
+  }
 }
 
 pub struct Triangle {
@@ -55,6 +74,66 @@ pub struct Mesh {
   pub rotation: Vector4F,
   pub scale: Vector4F,
   pub material: String,
+  pub octree: OctreeNode
+}
+
+impl Intersectable for Mesh {
+  fn intersect(&self, rorg: &Vector4F, rdir: &Vector4F, min_t: f64) -> Option<Intersection> {
+    let candidates = self.octree.intersection_candidates(rorg, rdir);
+
+    //println!("candidates: {}", candidates.len());
+
+    let mut closest = None;
+    let mut lmin_t = min_t;
+
+    for t in candidates {
+        let tri = &self.triangles[t];
+
+        let intersection = linear::intersect_ray_triangle(
+            &rorg,
+            &rdir,
+            &tri.v1,
+            &tri.v2,
+            &tri.v3,
+            lmin_t
+        );
+
+        if intersection.is_some() {
+            let inter = intersection.unwrap();
+            if inter.ray_t < lmin_t {
+                lmin_t = inter.ray_t;
+                closest = Some(inter);
+            }
+        }
+    }
+
+    /*
+    for tri in &self.triangles {
+        let intersection = linear::intersect_ray_triangle(
+            &rorg,
+            &rdir,
+            &tri.v1,
+            &tri.v2,
+            &tri.v3,
+            lmin_t
+        );
+
+        if intersection.is_some() {
+            let inter = intersection.unwrap();
+            if inter.ray_t < lmin_t {
+                lmin_t = inter.ray_t;
+                closest = Some(inter);
+            }
+        }
+    }
+    */
+
+    closest
+  }
+
+  fn material(&self) -> String {
+    self.material.clone()
+  }
 }
 
 pub enum LightType {
@@ -78,7 +157,22 @@ pub struct Scene {
   pub meshes: Vec<Mesh>,
   pub lights: Vec<Light>,
   pub skycolor: Color,
-  pub max_depth: u32
+  pub max_depth: u32,
+  pub path_samples: u32
+}
+
+impl Scene {
+  pub fn objects<'a>(&'a self) -> Vec<&'a Intersectable> {
+    let mut result = Vec::with_capacity(self.spheres.len() + self.meshes.len());
+    for sp in &self.spheres {
+      result.push(sp as &Intersectable);
+    }
+    for mesh in &self.meshes {
+      result.push(mesh as &Intersectable);
+    }
+
+    result
+  }
 }
 
 pub struct Output {
@@ -125,6 +219,7 @@ fn read_scene(scene: JsonValue) -> Option<Scene> {
     let mut lights = Vec::new();
     let mut skycolor = Color {r: 0.0, g: 0.0, b: 0.0};
     let mut max_depth = 5;
+    let mut path_samples = 1;
 
     for f in fields {
       if f.0 == "skycolor" {
@@ -138,6 +233,11 @@ fn read_scene(scene: JsonValue) -> Option<Scene> {
           max_depth = md as u32;
         }
       }
+      else if f.0 == "path_samples" {
+        if let JsonValue::Number(ps) = f.1 {
+          path_samples = ps as u32;
+        }
+      }      
       else if let JsonValue::Array(values) = f.1 {
         if f.0 == "materials" {
           materials = read_materials(values);
@@ -157,7 +257,8 @@ fn read_scene(scene: JsonValue) -> Option<Scene> {
       meshes,
       lights,
       skycolor,
-      max_depth
+      max_depth,
+      path_samples
     });
   }
 
@@ -322,13 +423,15 @@ fn read_meshes(meshes: Vec<JsonValue>) -> Vec<Mesh> {
       }
 
       let triangles = create_triangles(&mut vertices);
+      let octree = octree::build_octree(&triangles);
 
       let mut m = Mesh {
         triangles,
         translation,
         rotation,
         scale,
-        material
+        material,
+        octree
       };
 
       result.push(m);

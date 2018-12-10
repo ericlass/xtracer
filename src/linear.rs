@@ -324,15 +324,6 @@ impl Vertex4F {
 
 //############################# INTERSECTIONS #############################
 
-struct PluckerCoords {
-  p0: f64,
-  p1: f64,
-  p2: f64,
-  p3: f64,
-  p4: f64,
-  p5: f64
-}
-
 pub struct Intersection {
   pub pos: Vector4F,
   pub normal: Vector4F,
@@ -340,24 +331,6 @@ pub struct Intersection {
   pub tex_v: f64,
   pub barycentric: Vector4F,
   pub ray_t: f64
-}
-
-pub fn ray_intersects_sphere(p0: &Vector4F, d: &Vector4F, c: &Vector4F, r: f64) -> bool {
-  let dnorm = d.normalize();
-
-  let e = c - p0;
-  let le = e.len();
-  let a = Vector4F::dot(&e, &dnorm);
-  let f = (r * r - le * le + a * a).sqrt();
-
-  if f >= 0.0 {
-    let t = a - f;
-    if t >= 0.0 {
-      return true;
-    }
-  }
-
-  false
 }
 
 // Intersects ray with sphere.
@@ -407,6 +380,14 @@ pub fn intersect_ray_sphere(p0: &Vector4F, d: &Vector4F, c: &Vector4F, r: f64, m
   Some(result)
 }
 
+// Intersects ray with triangle.
+//
+// p0: ray origin
+// d: ray direction, scaled by ray length
+// v1: first vertex of triangle
+// v2: second vertex of triangle
+// v3: third vertex of triangle
+// mint_t: minimum T value of ray. If intersection is bigger than this None is returned
 pub fn intersect_ray_triangle(rorg: &Vector4F, rdir: &Vector4F, t0: &Vertex4F, t1: &Vertex4F, t2: &Vertex4F, min_t: f64) -> Option<Intersection> {
   let p0 = &t0.pos;
   let p1 = &t1.pos;
@@ -543,112 +524,72 @@ pub fn intersect_ray_triangle(rorg: &Vector4F, rdir: &Vector4F, t0: &Vertex4F, t
   Some(result)
 }
 
-pub fn ray_intersects_triangle(rorg: &Vector4F, rdir: &Vector4F, t0: &Vertex4F, t1: &Vertex4F, t2: &Vertex4F) -> bool {
-  let p0 = &t0.pos;
-  let p1 = &t1.pos;
-  let p2 = &t2.pos;
+pub fn ray_intersects_aabb(rorg: &Vector4F, rdir: &Vector4F, min: &Vector4F, max: &Vector4F) -> bool {
+  //Source: https://tavianator.com/fast-branchless-raybounding-box-intersections/
 
-  let e1 = p1 - p0;
-  let e2 = p2 - p1;
-  let n = Vector4F::cross(&e1, &e2);
-  let dot = Vector4F::dot(&n, rdir);
+  let mut tmin = std::f64::NEG_INFINITY;
+  let mut tmax = std::f64::INFINITY;
+  let nrdir = rdir.invert();
 
-  if !(dot < 0.0) {
-    return false;
+  if rdir.x != 0.0 {
+    let tx1 = (min.x - rorg.x) * nrdir.x;
+    let tx2 = (max.x - rorg.x) * nrdir.x;
+
+    tmin = f64::max(tmin, f64::min(tx1, tx2));
+    tmax = f64::min(tmax, f64::max(tx1, tx2));
   }
 
-  let d = Vector4F::dot(&n, &p0);
-  let mut t = d - Vector4F::dot(&n, rorg);
+  if rdir.y != 0.0 {
+    let ty1 = (min.y - rorg.y) * nrdir.y;
+    let ty2 = (max.y - rorg.y) * nrdir.y;
 
-  if !(t <= 0.0) {
-    return false;
+    tmin = f64::max(tmin, f64::min(ty1, ty2));
+    tmax = f64::min(tmax, f64::max(ty1, ty2));
   }
 
-  t = t / dot;
-  assert!(t >= 0.0);
+  if rdir.z != 0.0 {
+    let tz1 = (min.z - rorg.z) * nrdir.z;
+    let tz2 = (max.z - rorg.z) * nrdir.z;
 
-  let p = Vector4F {
-    x: rorg.x + (rdir.x * t),
-    y: rorg.y + (rdir.y * t),
-    z: rorg.z + (rdir.z * t),
+    tmin = f64::max(tmin, f64::min(tz1, tz2));
+    tmax = f64::min(tmax, f64::max(tz1, tz2));
+  }
+
+  tmax >= tmin
+}
+
+pub fn triangle_aabb_overlap(t1: &Vector4F, t2: &Vector4F, t3: &Vector4F, min: &Vector4F, max: &Vector4F) -> bool {
+  let (tmin, tmax) = triangle_to_aabb(t1, t2, t3);
+  aabb_aabb_overlap(&tmin, &tmax, min, max)
+}
+
+pub fn triangle_to_aabb(t1: &Vector4F, t2: &Vector4F, t3: &Vector4F) -> (Vector4F, Vector4F) {
+  let min = Vector4F {
+    x: f64::min(f64::min(t1.x, t2.x), t3.x),
+    y: f64::min(f64::min(t1.y, t2.y), t3.y),
+    z: f64::min(f64::min(t1.z, t2.z), t3.z),
     w: 1.0
   };
 
-  let u0;
-  let u1;
-  let u2;
+  let max = Vector4F {
+    x: f64::max(f64::max(t1.x, t2.x), t3.x),
+    y: f64::max(f64::max(t1.y, t2.y), t3.y),
+    z: f64::max(f64::max(t1.z, t2.z), t3.z),
+    w: 1.0
+  };
 
-  let v0;
-  let v1;
-  let v2;
+  (min, max)
+}
 
-  let absx = n.x.abs();
-  let absy = n.y.abs();
-  let absz = n.z.abs();
+pub fn aabb_aabb_overlap(min1: &Vector4F, max1: &Vector4F, min2: &Vector4F, max2: &Vector4F) -> bool {
+  if min1.x > max2.x {return false};
+  if max1.x < min2.x {return false};
 
-  if absx > absy {
-    if absx > absz {
-      u0 = p.y - p0.y;
-      u1 = p1.y - p0.y;
-      u2 = p2.y - p0.y;
+  if min1.y > max2.y {return false};
+  if max1.y < min2.y {return false};
 
-      v0 = p.z - p0.z;
-      v1 = p1.z - p0.z;
-      v2 = p2.z - p0.z;
-    }
-    else {
-      u0 = p.x - p0.x;
-      u1 = p1.x - p0.x;
-      u2 = p2.x - p0.x;
-
-      v0 = p.y - p0.y;
-      v1 = p1.y - p0.y;
-      v2 = p2.y - p0.y;
-    }
-  }
-  else {
-    if absy > absz {
-      u0 = p.x - p0.x;
-      u1 = p1.x - p0.x;
-      u2 = p2.x - p0.x;
-
-      v0 = p.z - p0.z;
-      v1 = p1.z - p0.z;
-      v2 = p2.z - p0.z;
-    }
-    else {
-      u0 = p.x - p0.x;
-      u1 = p1.x - p0.x;
-      u2 = p2.x - p0.x;
-
-      v0 = p.y - p0.y;
-      v1 = p1.y - p0.y;
-      v2 = p2.y - p0.y;
-    }
-  }
-
-  let mut temp = u1 * v2 - v1 * u2;
-
-  if !(temp != 0.0) {
-    return false;
-  }
-
-  temp = 1.0 / temp;
-
-  let alpha = (u0 * v2 - v0 * u2) * temp;
-  if !(alpha >= 0.0) {
-    return false;
-  }
-
-  let beta = (u1 * v0 - v1 * u0) * temp;
-  if !(beta >= 0.0) {
-    return false;
-  }
-
-  let gamma = 1.0 - alpha - beta;
-  if !(gamma >= 0.0) {
-    return false;
-  }
+  if min1.z > max2.z {return false};
+  if max1.z < min2.z {return false};
 
   true
 }

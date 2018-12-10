@@ -1,7 +1,8 @@
 {
   "scene": {
     "skycolor": [0.0, 0.0, 0.0],
-    "max_trace_depth": 2,
+    "max_trace_depth": 0,
+    "path_samples": 8,
     "materials": [
       {
         "id": "mate_red",
@@ -17,7 +18,7 @@
         "transparency": 0.0,
         "ior": 1.333,
         "reflect": 0.5,
-        "roughness": 0.5
+        "roughness": 0.8
       },
       {
         "id": "mate_blue",
@@ -33,7 +34,7 @@
         "transparency": 0.0,
         "ior": 1.333,
         "reflect": 0.5,
-        "roughness": 0.5
+        "roughness": 0.8
       }
     ],
     "spheres": [
@@ -46,10 +47,10 @@
     "meshes": [
       {
         "file": "cube.obj",
-        "translation": [0.0, 0.0, 3.0],
+        "translation": [0.0, -0.1, 3.0],
         "scale": [0.0015, 0.0015, 0.0015],
         "rotation": [0.0, 0.0, 0.0],
-        "material": "mate_red"
+        "material": "mate_green"
       }
     ],
     "lights": [
@@ -57,14 +58,14 @@
         "type": "point",
         "position": [2.0, 2.0, 1.0],
         "color": [0.6, 0.8, 0.9],
-        "intensity": 16.0
+        "intensity": 10.0
       }
     ]
   },
   "output": {
     "file": "render.tga",
-    "width": 1280,
-    "height": 720,
-    "samples": 32
+    "width": 1920,
+    "height": 1080,
+    "samples": 1
   }
 }

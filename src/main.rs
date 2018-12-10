@@ -5,6 +5,7 @@ extern crate num_cpus;
 mod json;
 mod linear;
 mod obj;
+mod octree;
 mod random;
 mod settings;
 mod shade;
@@ -27,7 +28,7 @@ use random::Random;
 const HALF_SECOND: u64 = 500000000;
 
 fn main() {
-    let settings = load_settings();
+     let settings = load_settings();
 
     let cam_pos = Vector4F {
         x: 0.0,
@@ -52,7 +53,13 @@ fn main() {
     let img_pix_inc_h = img_plane_w / img_w as f64;
     let img_pix_inc_v = img_plane_h / img_h as f64;
 
+    //Pre-calculate values for multi sampling
     let samplesi = settings.output.samples;
+    let samples = samplesi as f64;
+    let samples2 = samples * samples;
+    let sample_width = img_pix_inc_h / samples;
+    let sample_offset = (img_pix_inc_h / 2.0) - (sample_width / 2.0);
+
     let arc_settings = Arc::new(settings);
     let arc_cam_pos = Arc::new(cam_pos);
 
@@ -68,102 +75,86 @@ fn main() {
         lines.push(line);
     }
 
-    let mut stop_watch = StopWatch::new();
     let mut total_watch = StopWatch::new();
     total_watch.start();
 
-    let mut fulltime = 0.0;
+    let mut stop_watch = StopWatch::new();
+    stop_watch.start();
 
-    for sample in 0..samplesi {
-        println!("=========================");
-        println!("Sample {} of {}", sample + 1, samplesi);
+    let mut last_time = time::precise_time_ns();
+    let mut lines_done = 0;
+    let mut py = img_plane_b;
 
-        stop_watch.start();
+    let mut num_threads = 0;
+    let mut iy = 0;    
+    
+    let (tx, rx) = mpsc::channel();
 
-        let mut last_time = time::precise_time_ns();
-        let mut lines_done = 0;
-        let mut py = img_plane_b;
+    while iy < img_h {
+        while num_threads < numcpus && iy < img_h {
+            let larc_settings = arc_settings.clone();
+            let larc_cam_pos = arc_cam_pos.clone();
+            let ltx = mpsc::Sender::clone(&tx);
+            let liy = iy;
 
-        let mut num_threads = 0;
-        let mut iy = 0;    
-        
-        let (tx, rx) = mpsc::channel();
+            thread::spawn(move || {
+                let mut random = Random::new(31 + iy);
+                let mut px = img_plane_l;
+                let mut colors = Vec::with_capacity(img_w as usize);
 
-        while iy < img_h {
-            while num_threads < numcpus && iy < img_h {
-                let larc_settings = arc_settings.clone();
-                let larc_cam_pos = arc_cam_pos.clone();
-                let ltx = mpsc::Sender::clone(&tx);
-                let liy = iy;
+                for _ix in 0..img_w {
+                    //Create sample grid of samples * samples sub-pixels
+                    let sub_pix_l = px - sample_offset;
+                    let sub_pix_b = py - sample_offset;
 
-                thread::spawn(move || {
-                    let mut random = Random::new(31 + sample + iy);
-                    let mut px = img_plane_l;
-                    let mut colors = Vec::with_capacity(img_w as usize);
+                    let mut pix_color = Color::black();
 
-                    for _ix in 0..img_w {
-                        let spx = px + ((random.random_f() - 0.5) * img_pix_inc_h);
-                        let spy = py + ((random.random_f() - 0.5) * img_pix_inc_v);
+                    let steps = larc_settings.output.samples;
+                    let mut spy = sub_pix_b;
+                    for _spy in 0..steps  {
+                        let mut spx = sub_pix_l;
+                        for _spx in 0..steps {
+                            let pixel = Vector4F {
+                                x: spx,
+                                y: spy,
+                                z: img_plane_dist,
+                                w: 0.0,
+                            };
 
-                        let pixel = Vector4F {
-                            x: spx,
-                            y: spy,
-                            z: img_plane_dist,
-                            w: 0.0,
-                        };
+                            let ray_dir = &pixel - &larc_cam_pos;
+                            let pc = trace(&larc_cam_pos, &ray_dir, &larc_settings.scene, &mut random, 0);
 
-                        let ray_dir = &pixel - &larc_cam_pos;
-                        let pc = trace(&larc_cam_pos, &ray_dir, &larc_settings.scene, &mut random, 0);
-                        colors.push(pc);
+                            pix_color.r += pc.r;
+                            pix_color.g += pc.g;
+                            pix_color.b += pc.b;
 
-                        px += img_pix_inc_h;
+                            spx += sample_width;
+                        }
+                        spy += sample_width;
                     }
-                        
-                    ltx.send((liy, colors)).unwrap();
-                });
-                
-                num_threads += 1;
-                py += img_pix_inc_v;
-                iy += 1;
-            }
 
-            //Read back results from threads
-            let mut rxv = rx.try_recv();
-            while rxv.is_ok() {
-                let result = rxv.unwrap();
-                let line = result.0 as usize;
+                    pix_color.r = pix_color.r / samples2;
+                    pix_color.g = pix_color.g / samples2;
+                    pix_color.b = pix_color.b / samples2;
+                    colors.push(pix_color);
 
-                let orig = &mut lines[line];
-                let new = &result.1;
-                for l in 0..new.len() {
-                    let oc = &mut orig[l];
-                    let nc = &new[l];
-
-                    oc.r = oc.r + nc.r;
-                    oc.g = oc.g + nc.g;
-                    oc.b = oc.b + nc.b;
+                    px += img_pix_inc_h;
                 }
-
-                num_threads -= 1;
-                lines_done += 1;
-                rxv = rx.try_recv();
-            }
-
-            let this_time = time::precise_time_ns();
-            let diff = this_time - last_time;
-            if diff > HALF_SECOND {
-                let percent = (lines_done as f64 / img_h as f64) * 100.0;
-                println!("{}%", percent.round());
-                last_time = this_time;
-            }
+                    
+                ltx.send((liy, colors)).unwrap();
+            });
+            
+            num_threads += 1;
+            py += img_pix_inc_v;
+            iy += 1;
         }
 
-        //Read all the rest (blocking)
-        while num_threads > 0 {
-            let rxv = rx.recv();
+        //Read back results from threads
+        let mut rxv = rx.try_recv();
+        while rxv.is_ok() {
             let result = rxv.unwrap();
             let line = result.0 as usize;
-            
+
             let orig = &mut lines[line];
             let new = &result.1;
             for l in 0..new.len() {
@@ -176,29 +167,54 @@ fn main() {
             }
 
             num_threads -= 1;
+            lines_done += 1;
+            rxv = rx.try_recv();
         }
 
-        stop_watch.stop();
-        println!("Render time: {}ms", stop_watch.get_millis());
-
-        //Calculate and show ETA
-        fulltime += stop_watch.get_millis();
-        let average_per_sample = fulltime / ((sample + 1) as f64);
-        let time_left = (samplesi - sample) as f64 * average_per_sample;
-        println!("ETA: {}s", time_left as u32 / 1000);
+        let this_time = time::precise_time_ns();
+        let diff = this_time - last_time;
+        if diff > HALF_SECOND {
+            let mut percent = (lines_done as f64 / img_h as f64) * 100.0;
+            percent = (percent * 100.0).round() / 100.0;
+            println!("{} %", percent);
+            last_time = this_time;
+        }
     }
+
+    //Read all the rest (blocking)
+    while num_threads > 0 {
+        let rxv = rx.recv();
+        let result = rxv.unwrap();
+        let line = result.0 as usize;
+        
+        let orig = &mut lines[line];
+        let new = &result.1;
+        for l in 0..new.len() {
+            let oc = &mut orig[l];
+            let nc = &new[l];
+
+            oc.r = oc.r + nc.r;
+            oc.g = oc.g + nc.g;
+            oc.b = oc.b + nc.b;
+        }
+
+        num_threads -= 1;
+    }
+
+    stop_watch.stop();
+    let render_millis = stop_watch.get_millis();
+    println!("Render time: {}ms", render_millis);
 
     println!("=========================");
 
     stop_watch.start();
     let mut pixels = Vec::with_capacity(((img_w * img_h) * 3) as usize);
     let mut rand = Random::new(97);
-    let samplef = (samplesi + 1) as f64;
     for line in &lines {
         for col in line {
-            pixels.push(convert(col.b / samplef, &mut rand));
-            pixels.push(convert(col.g / samplef, &mut rand));
-            pixels.push(convert(col.r / samplef, &mut rand));
+            pixels.push(convert(col.b, &mut rand));
+            pixels.push(convert(col.g, &mut rand));
+            pixels.push(convert(col.r, &mut rand));
         }
     }    
     stop_watch.stop();
@@ -217,6 +233,24 @@ fn main() {
     println!("=========================");
     total_watch.stop();
     println!("TOTAL: {}ms", total_watch.get_millis());
+
+    //Calculate how many rays were traced
+    let mut num_rays = (samplesi * samplesi) * arc_settings.scene.path_samples.pow(arc_settings.scene.max_depth);
+    num_rays = num_rays * (img_h * img_w);
+
+    let mut num_light_rays = 0;
+    for light in &arc_settings.scene.lights {
+        if let LightType::Point = light.ltype {
+            num_light_rays += 1;
+        }
+        else if let LightType::Sphere = light.ltype {
+            num_light_rays += light.samples;
+        }
+    }
+
+    let total_rays = num_rays + (num_rays * num_light_rays);
+    let rays_per_ms = total_rays as f64 / render_millis;
+    println!("Traced {} rays, {} rays per ms", total_rays, rays_per_ms.round());
 }
 
 fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Random, depth: u32) -> Color {
@@ -226,24 +260,14 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
         return result;
     }
 
-    let spheres = &scene.spheres;
-    let meshes = &scene.meshes;
+    let objects = scene.objects();
 
     let mut closest = None;
-    let mut closest_sp_index: i32 = -1;
-    let mut closest_mesh_index: i32 = -1;
-    let mut min_t = 9999999999.99;
+    let mut closest_object = None;
+    let mut min_t = std::f64::MAX;
 
-    for i in 0..spheres.len() {
-        let sphere = &spheres[i];
-
-        let intersection = linear::intersect_ray_sphere(
-            &ray_org,
-            &ray_dir,
-            &sphere.center,
-            sphere.radius,
-            min_t,
-        );
+    for obj in &objects {
+        let intersection = obj.intersect(ray_org, ray_dir, min_t);
 
         if intersection.is_some() {
             let inter = intersection.unwrap();
@@ -251,50 +275,17 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
             if inter.ray_t < min_t {
                 min_t = inter.ray_t;
                 closest = Some(inter);
-                closest_sp_index = i as i32;
-            }
-        }
-    }
-
-    for i in 0..meshes.len() {
-        let mesh = &meshes[i];
-
-        for tri in &mesh.triangles {
-            let intersection = linear::intersect_ray_triangle(
-                &ray_org,
-                &ray_dir,
-                &tri.v1,
-                &tri.v2,
-                &tri.v3,
-                min_t
-            );
-
-            if intersection.is_some() {
-                let inter = intersection.unwrap();
-                if inter.ray_t < min_t {
-                    min_t = inter.ray_t;
-                    closest = Some(inter);
-                    closest_mesh_index = i as i32;
-                    closest_sp_index = -1;
-                }
+                closest_object = Some(obj);
             }
         }
     }
 
     if closest.is_some() {
         let inter = closest.unwrap();
+        let object = closest_object.unwrap();
         let vdir = (ray_org - &inter.pos).normalize();
 
-        let mut mat_name = String::from("");
-        if closest_sp_index >= 0 {
-            let sp = &spheres[closest_sp_index as usize];
-            mat_name = sp.material.clone();
-        }
-        else if closest_mesh_index >= 0 {
-            let mesh = &meshes[closest_mesh_index as usize];
-            mat_name = mesh.material.clone();
-        }        
-
+        let mat_name = object.material();
         let mut material = None;
         for mat in &scene.materials {
             if mat.id == mat_name {
@@ -314,25 +305,13 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                 if let LightType::Point = light.ltype {
                     let mut is_in_shadow = false;
 
-                    for l in 0..spheres.len() {
-                        if l != closest_sp_index as usize {
-                            let ssp = &spheres[l];
-                            if linear::ray_intersects_sphere(&inter.pos, &ldir, &ssp.center, ssp.radius) {
-                                is_in_shadow = true;
-                                break;
-                            }
+                    for obj in &objects {
+                        if obj.intersect(&inter.pos, &ldir, std::f64::MAX).is_some() {
+                            is_in_shadow = true;
+                            break;
                         }
                     }
 
-                    for m in meshes {
-                        for t in &m.triangles {
-                            if linear::ray_intersects_triangle(&inter.pos, &ldir, &t.v1, &t.v2, &t.v3) {
-                                is_in_shadow = true;
-                                break;
-                            }
-                        }
-                    }
-                    
                     light_intens = if is_in_shadow {0.0} else {1.0};
                 }
                 else if let LightType::Sphere = light.ltype {
@@ -342,22 +321,11 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                         let rand_pos = random.random_point_on_sphere(&light.position, light.radius);
                         let sample_dir = &rand_pos - &inter.pos;
                         let mut is_in_shadow = false;
-                        for l in 0..spheres.len() {
-                            if l != closest_sp_index as usize {
-                                let ssp = &spheres[l];
-                                if linear::ray_intersects_sphere(&inter.pos, &sample_dir, &ssp.center, ssp.radius) {
-                                    is_in_shadow = true;
-                                    break;
-                                }
-                            }
-                        }
 
-                        for m in meshes {
-                            for t in &m.triangles {
-                                if linear::ray_intersects_triangle(&inter.pos, &sample_dir, &t.v1, &t.v2, &t.v3) {
-                                    is_in_shadow = true;
-                                    break;
-                                }
+                        for obj in &objects {
+                            if obj.intersect(&inter.pos, &sample_dir, std::f64::MAX).is_some() {
+                                is_in_shadow = true;
+                                break;
                             }
                         }
 
@@ -384,16 +352,27 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                 lcolor.b = lcolor.b + (light.color.b * light_total);
             }
 
-            let path_dir = random.random_point_on_hemisphere(&inter.normal).normalize();
-            let path_color = trace(&inter.pos, &path_dir, scene, random, depth + 1);
+            let mut path_color = Color::black();
+            for _ps in 0..scene.path_samples {
+                let path_dir = random.random_point_on_hemisphere(&inter.normal).normalize();
+                let pc = trace(&inter.pos, &path_dir, scene, random, depth + 1);
+
+                let diffuse = shade::shade_oren_nayar(&path_dir, &inter.normal, &vdir, mat.roughness, 0.01);
+                let specular = shade::shade_cook_torrance(&path_dir, &vdir, &inter.normal, mat.roughness, 0.01);
+                let shading = diffuse + specular;
+
+                path_color.r += pc.r * shading;
+                path_color.g += pc.g * shading;
+                path_color.b += pc.b * shading;
+            }
+            let ps = 1.0 / (scene.path_samples as f64);
+            path_color.r *= ps;
+            path_color.g *= ps;
+            path_color.b *= ps;
             
-            let diffuse = shade::shade_oren_nayar(&path_dir, &inter.normal, &vdir, mat.roughness, 0.01);
-            let specular = shade::shade_cook_torrance(&path_dir, &vdir, &inter.normal, mat.roughness, 0.01);
-            let shading = diffuse + specular;
-            
-            lcolor.r += path_color.r * shading;
-            lcolor.g += path_color.r * shading;
-            lcolor.b += path_color.r * shading;
+            lcolor.r += path_color.r;
+            lcolor.g += path_color.r;
+            lcolor.b += path_color.r;
 
             //Enabling this only show GI
             /*if depth == 0 {
