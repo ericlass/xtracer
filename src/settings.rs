@@ -9,6 +9,7 @@ use linear::Intersection;
 use obj;
 use octree;
 use octree::OctreeNode;
+use stopwatch::StopWatch;
 
 pub struct Color {
   pub r: f64,
@@ -23,6 +24,14 @@ impl Color {
 
   pub fn black() -> Color {
     Color {r: 0.0, g: 0.0, b: 0.0}
+  }
+
+  pub fn clone(&self) -> Color {
+    Color {
+      r: self.r,
+      g: self.g,
+      b: self.b,
+    }
   }
 }
 
@@ -79,9 +88,7 @@ pub struct Mesh {
 
 impl Intersectable for Mesh {
   fn intersect(&self, rorg: &Vector4F, rdir: &Vector4F, min_t: f64) -> Option<Intersection> {
-    let candidates = self.octree.intersection_candidates(rorg, rdir);
-
-    //println!("candidates: {}", candidates.len());
+    let candidates = self.octree.intersection_candidates(rorg, &rdir.normalize());
 
     let mut closest = None;
     let mut lmin_t = min_t;
@@ -106,27 +113,6 @@ impl Intersectable for Mesh {
             }
         }
     }
-
-    /*
-    for tri in &self.triangles {
-        let intersection = linear::intersect_ray_triangle(
-            &rorg,
-            &rdir,
-            &tri.v1,
-            &tri.v2,
-            &tri.v3,
-            lmin_t
-        );
-
-        if intersection.is_some() {
-            let inter = intersection.unwrap();
-            if inter.ray_t < lmin_t {
-                lmin_t = inter.ray_t;
-                closest = Some(inter);
-            }
-        }
-    }
-    */
 
     closest
   }
@@ -416,14 +402,29 @@ fn read_meshes(meshes: Vec<JsonValue>) -> Vec<Mesh> {
         }
       }
 
-      //Apply transform
+      let mut stopwatch = StopWatch::new();
+
+      //Apply transform to position AND normals
+      stopwatch.start();
       for vert in &mut vertices {
         let new_pos = vert.pos.rotate_x(rotation.x).rotate_y(rotation.y).rotate_z(rotation.z);
         vert.pos = &(&new_pos * &scale) + &translation;
-      }
 
+        let new_norm = vert.normal.rotate_x(rotation.x).rotate_y(rotation.y).rotate_z(rotation.z);
+        vert.normal = new_norm;
+      }
+      stopwatch.stop();
+      println!("Transforming vertices took {}ms", stopwatch.get_millis());
+
+      stopwatch.start();
       let triangles = create_triangles(&mut vertices);
+      stopwatch.stop();
+      println!("Creating triangles took {}ms", stopwatch.get_millis());
+
+      stopwatch.start();
       let octree = octree::build_octree(&triangles);
+      stopwatch.stop();
+      println!("Building octree took {}ms", stopwatch.get_millis());
 
       let mut m = Mesh {
         triangles,
@@ -445,12 +446,14 @@ fn create_triangles(verts: &mut Vec<Vertex4F>) -> Vec<Triangle> {
   let num_tris = verts.len() / 3;
   let mut result = Vec::with_capacity(num_tris);
 
-  for _i in 0..num_tris {
+  for i in 0..num_tris {
+    let i1 = i * 3;
+
     result.push(
       Triangle {
-        v1: verts.remove(0),
-        v2: verts.remove(0),
-        v3: verts.remove(0)
+        v1: verts[i1].clone(),
+        v2: verts[i1 + 1].clone(),
+        v3: verts[i1 + 2].clone()
       }
     );
   }

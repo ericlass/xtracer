@@ -10,16 +10,6 @@ struct Vertex {
   ti: usize,
 }
 
-impl Vertex {
-  fn new() -> Vertex {
-    Vertex {
-      vi: 0,
-      ni: 0,
-      ti: 0,
-    }
-  }
-}
-
 //Loads triangles from an OBJ file. Only triangles are supported.
 //In the returned vec, each pair of three values in a row form a triangle.
 pub fn load_obj(filename: &str) -> Vec<Vertex4F> {
@@ -77,9 +67,9 @@ pub fn load_obj(filename: &str) -> Vec<Vertex4F> {
     }
 
     if !has_normals {
-      let edge1 = &verts[1].pos - &verts[0].pos;
+      let edge1 = &verts[0].pos - &verts[1].pos;
       let edge2 = &verts[2].pos - &verts[1].pos;
-      let cross = Vector4F::cross(&edge1, &edge2).normalize();
+      let cross = Vector4F::cross(&edge2, &edge1).normalize();
 
       for v in &mut verts {
         v.normal = cross.clone();
@@ -157,7 +147,7 @@ fn read_face_vertex(token: &String) -> Vertex {
     }
   }
   if parts.len() >= 3 {
-    if parts[1].len() > 0 {
+    if parts[2].len() > 0 {
       ni = parts[2].parse().unwrap();
     }
   }

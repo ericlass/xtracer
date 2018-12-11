@@ -28,7 +28,16 @@ use random::Random;
 const HALF_SECOND: u64 = 500000000;
 
 fn main() {
-     let settings = load_settings();
+    let ro = Vector4F::new(1.01, 0.0, -2.0);
+    let rd = Vector4F::new(0.0, 0.0, 1.0);
+
+    let min = Vector4F::new(-1.0, -1.0, -1.0);
+    let max = Vector4F::new(1.0, 1.0, 1.0);
+
+    let int = linear::ray_intersects_aabb(&ro, &rd, &min, &max);
+    println!("Intersects: {}", int);
+
+    let settings = load_settings();
 
     let cam_pos = Vector4F {
         x: 0.0,
@@ -233,24 +242,6 @@ fn main() {
     println!("=========================");
     total_watch.stop();
     println!("TOTAL: {}ms", total_watch.get_millis());
-
-    //Calculate how many rays were traced
-    let mut num_rays = (samplesi * samplesi) * arc_settings.scene.path_samples.pow(arc_settings.scene.max_depth);
-    num_rays = num_rays * (img_h * img_w);
-
-    let mut num_light_rays = 0;
-    for light in &arc_settings.scene.lights {
-        if let LightType::Point = light.ltype {
-            num_light_rays += 1;
-        }
-        else if let LightType::Sphere = light.ltype {
-            num_light_rays += light.samples;
-        }
-    }
-
-    let total_rays = num_rays + (num_rays * num_light_rays);
-    let rays_per_ms = total_rays as f64 / render_millis;
-    println!("Traced {} rays, {} rays per ms", total_rays, rays_per_ms.round());
 }
 
 fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Random, depth: u32) -> Color {
@@ -345,7 +336,7 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                 let diffuse = shade::shade_oren_nayar(&ldir, &inter.normal, &vdir, mat.roughness, 0.01);
                 let specular = shade::shade_cook_torrance(&ldir, &vdir, &inter.normal, mat.roughness, 0.01);
                 let shading = diffuse + specular;
-                
+                                
                 let light_total = shading * light_intens;
                 lcolor.r = lcolor.r + (light.color.r * light_total);
                 lcolor.g = lcolor.g + (light.color.g * light_total);
@@ -360,7 +351,7 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                 let diffuse = shade::shade_oren_nayar(&path_dir, &inter.normal, &vdir, mat.roughness, 0.01);
                 let specular = shade::shade_cook_torrance(&path_dir, &vdir, &inter.normal, mat.roughness, 0.01);
                 let shading = diffuse + specular;
-
+                
                 path_color.r += pc.r * shading;
                 path_color.g += pc.g * shading;
                 path_color.b += pc.b * shading;

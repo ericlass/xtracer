@@ -21,27 +21,22 @@ impl OctreeNode {
 
   pub fn intersection_candidates(&self, rorg: &Vector4F, rdir: &Vector4F) -> Vec<usize> {
     let mut result = Vec::new();
-    self.intersection_candidates_int(rorg, rdir, &mut result, 1);
+    self.intersection_candidates_rec(rorg, rdir, &mut result);
     result
   }
 
-  fn intersection_candidates_int(&self, rorg: &Vector4F, rdir: &Vector4F, candidates: &mut Vec<usize>, level: u32) {
+  fn intersection_candidates_rec(&self, rorg: &Vector4F, rdir: &Vector4F, candidates: &mut Vec<usize>) {
     if linear::ray_intersects_aabb(rorg, rdir, &self.min, &self.max) {
-      //println!("Level {} intersects", level);
       if self.children.len() > 0 {
         for child in &self.children {
-          child.intersection_candidates_int(rorg, rdir, candidates, level + 1);
+          child.intersection_candidates_rec(rorg, rdir, candidates);
         }
       }
       else {
         for tri in &self.tris {
           candidates.push(*tri);
         }
-        println!("Added {} candidates", self.tris.len());
       }
-    }
-    else {
-      //println!("Level {} not intersects", level);
     }
   }
 }
@@ -81,52 +76,50 @@ pub fn build_octree(triangles: &Vec<Triangle>) -> OctreeNode {
     max.z = qmax(max.z, tri.v1.pos.z, tri.v2.pos.z, tri.v3.pos.z);
   }
 
-  build_octree_rec(&mut result, triangles, &min, &max, 1, 2);
   result.min = min;
   result.max = max;
+  build_octree_rec(&mut result, triangles, 1, 5);
 
   result
 }
 
-fn build_octree_rec(node: &mut OctreeNode, triangles: &Vec<Triangle>, min: &Vector4F, max: &Vector4F, depth: u32, max_depth: u32) {
-  if depth > max_depth {
+fn build_octree_rec(node: &mut OctreeNode, triangles: &Vec<Triangle>, depth: u32, max_depth: u32) {
+  let min = &node.min;
+  let max = &node.max;
+
+  //Save intersecting tris only for leave nodes
+  if depth >= max_depth {
+    let mut tris = Vec::new();
+    for t in 0..triangles.len() {
+      let tri = &triangles[t];
+      if linear::triangle_aabb_overlap(&tri.v1.pos, &tri.v2.pos, &tri.v3.pos, min, max) {
+        tris.push(t);
+      }
+    }
+    node.tris = tris;
+
+    //Maximum level reached, stop recursion
     return;
   }
-
-  let mut tris = Vec::new();
-  for t in 0..triangles.len() {
-    let tri = &triangles[t];
-    if linear::triangle_aabb_overlap(&tri.v1.pos, &tri.v2.pos, &tri.v3.pos, min, max) {
-      tris.push(t);
-    }
-  }
-
-  //println!("Level {} has {} tris", depth, tris.len());
-
-  node.tris = tris;
 
   let half_x = (max.x - min.x) / 2.0;
   let half_y = (max.y - min.y) / 2.0;
   let half_z = (max.z - min.z) / 2.0;
 
   let mut x = min.x;
-  let mut y = min.y;
-  let mut z = min.z;
-
-  for xi in 0..2 {
-    for yi in 0..2 {
-      for zi in 0..2 {
+  for _x in 0..2 {
+    let mut y = min.y;
+    for _y in 0..2 {
+      let mut z = min.z;
+      for _z in 0..2 {
         let nmin = Vector4F::new(x, y, z);
         let nmax = Vector4F::new(x + half_x, y + half_y, z + half_z);
         let mut nnode = OctreeNode::new();
-        
-        build_octree_rec(&mut nnode, triangles, &nmin, &nmax, depth + 1, max_depth);
-
-        println!("Node {},{},{} has {} tris", xi, yi, zi, node.tris.len());
-
-        node.children.push(nnode);
         nnode.min = nmin;
         nnode.max = nmax;
+        
+        build_octree_rec(&mut nnode, triangles, depth + 1, max_depth);
+        node.children.push(nnode);
 
         z += half_z;
       }

@@ -320,6 +320,16 @@ impl Vertex4F {
       color: Color::black()
     }
   }
+
+  pub fn clone(&self) -> Vertex4F {
+    Vertex4F {
+      pos: self.pos.clone(),
+      normal: self.normal.clone(),
+      tex_u: self.tex_u,
+      tex_v: self.tex_v,
+      color: self.color.clone()
+    }
+  }
 }
 
 //############################# INTERSECTIONS #############################
@@ -525,37 +535,59 @@ pub fn intersect_ray_triangle(rorg: &Vector4F, rdir: &Vector4F, t0: &Vertex4F, t
 }
 
 pub fn ray_intersects_aabb(rorg: &Vector4F, rdir: &Vector4F, min: &Vector4F, max: &Vector4F) -> bool {
-  //Source: https://tavianator.com/fast-branchless-raybounding-box-intersections/
+  //Source: https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-box-intersection
+  let mut tmin = (min.x - rorg.x) / rdir.x;
+  let mut tmax = (max.x - rorg.x) / rdir.x;
 
-  let mut tmin = std::f64::NEG_INFINITY;
-  let mut tmax = std::f64::INFINITY;
-  let nrdir = rdir.invert();
-
-  if rdir.x != 0.0 {
-    let tx1 = (min.x - rorg.x) * nrdir.x;
-    let tx2 = (max.x - rorg.x) * nrdir.x;
-
-    tmin = f64::max(tmin, f64::min(tx1, tx2));
-    tmax = f64::min(tmax, f64::max(tx1, tx2));
+  if tmin > tmax {
+    let tmp = tmin;
+    tmin = tmax;
+    tmax = tmp;
   }
 
-  if rdir.y != 0.0 {
-    let ty1 = (min.y - rorg.y) * nrdir.y;
-    let ty2 = (max.y - rorg.y) * nrdir.y;
+  let mut tymin = (min.y - rorg.y) / rdir.y;
+  let mut tymax = (max.y - rorg.y) / rdir.y;
 
-    tmin = f64::max(tmin, f64::min(ty1, ty2));
-    tmax = f64::min(tmax, f64::max(ty1, ty2));
+  if tymin > tymax {
+    let tmp = tymin;
+    tymin = tymax;
+    tymax = tmp;
   }
 
-  if rdir.z != 0.0 {
-    let tz1 = (min.z - rorg.z) * nrdir.z;
-    let tz2 = (max.z - rorg.z) * nrdir.z;
-
-    tmin = f64::max(tmin, f64::min(tz1, tz2));
-    tmax = f64::min(tmax, f64::max(tz1, tz2));
+  if tmin > tymax || tymin > tmax {
+    return false;
   }
 
-  tmax >= tmin
+  if tymin > tmin {
+    tmin = tymin;
+  }
+
+  if tymax < tmax {
+    tmax = tymax;
+  }
+
+  let mut tzmin = (min.z - rorg.z) / rdir.z;
+  let mut tzmax = (max.z - rorg.z) / rdir.z;
+
+  if tzmin > tzmax {
+    let tmp = tzmin;
+    tzmin = tzmax;
+    tzmax = tmp;
+  }
+
+  if tmin > tzmax || tzmin > tmax {
+    return false;
+  }
+  /*
+  if tzmin > tmin {
+    tmin = tzmin;
+  }
+
+  if tzmax < tmax {
+    tmax = tzmax;
+  }
+  */
+  true
 }
 
 pub fn triangle_aabb_overlap(t1: &Vector4F, t2: &Vector4F, t3: &Vector4F, min: &Vector4F, max: &Vector4F) -> bool {
