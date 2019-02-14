@@ -354,9 +354,17 @@ pub fn intersect_ray_sphere(p0: &Vector4F, d: &Vector4F, c: &Vector4F, r: f64, m
   let dnorm = d.normalize();
 
   let e = c - p0;
+
   let le = e.len();
   let a = Vector4F::dot(&e, &dnorm);
-  let f = (r * r - le * le + a * a).sqrt();
+  let k = r * r - le * le + a * a;
+
+  //No intersection
+  if k < 0.0 {
+    return None;
+  }
+
+  let f = k.sqrt();
 
   //No intersection
   if f < 0.0 {

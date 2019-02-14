@@ -78,7 +78,7 @@ pub fn build_octree(triangles: &Vec<Triangle>) -> OctreeNode {
 
   result.min = min;
   result.max = max;
-  build_octree_rec(&mut result, triangles, 1, 5);
+  build_octree_rec(&mut result, triangles, 1, 4);
 
   result
 }
