@@ -15,22 +15,11 @@ impl Random {
     //Crete random number in range 0...u32.MAX
     pub fn random (&mut self) -> u32 {
         rand::thread_rng().gen()
-
-        /*
-        let mut x = self.rand_seed;
-        x = x ^ (x << 13);
-        x = x ^ (x >> 17);
-        x = x ^ (x << 5);
-        self.rand_seed = x;
-
-        x
-        */
     }
 
     //Create random number in range 0.0...1.0
     pub fn random_f(&mut self) -> f64 {
         rand::thread_rng().gen()
-        //self.random() as f64 * 2.3283064370807973754314699618685e-10        
     }
 
     //Creates point on unit sphere centered at (0,0,0) with radius 1.0.
@@ -47,6 +36,10 @@ impl Random {
             z: phi.cos(),
             w: 1.0
         }
+    }
+
+    pub fn random_direction(&mut self) -> Vector4F {
+        self.random_point_on_unit_sphere()
     }
 
     //Create point on sphere centered at given pos and with given radius

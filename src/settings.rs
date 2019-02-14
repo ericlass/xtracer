@@ -237,6 +237,10 @@ fn read_scene(scene: JsonValue) -> Option<Scene> {
       }
     }
 
+    if max_depth <= 0 {
+      path_samples = 0;
+    }
+
     return Some(Scene {
       materials,
       spheres,

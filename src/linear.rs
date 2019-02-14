@@ -129,6 +129,11 @@ impl Vector4F {
   pub fn normalize(&self) -> Vector4F {
     let len = self.len();
 
+    //Avoid division by 0
+    if len == 0.0 {
+      return Vector4F::null();
+    }
+
     Vector4F{
       x: self.x / len,
       y: self.y / len,
@@ -373,7 +378,7 @@ pub fn intersect_ray_sphere(p0: &Vector4F, d: &Vector4F, c: &Vector4F, r: f64, m
 
   let t = a - f;
 
-  if t < 0.0 || t > min_t {
+  if t <= 0.0 || t > min_t {
     return None;
   }
 

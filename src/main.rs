@@ -276,6 +276,10 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
         let object = closest_object.unwrap();
         let vdir = (ray_org - &inter.pos).normalize();
 
+        if inter.ray_t == 0.0 {
+            dbg!(inter.ray_t);
+        }
+
         let mat_name = object.material();
         let mut material = None;
         for mat in &scene.materials {
@@ -288,6 +292,7 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
         if material.is_some() {
             let mat = material.unwrap();
             let mut lcolor = Color::black();
+            let mut light_verts = Vec::with_capacity(scene.path_samples as usize);
 
             for light in &scene.lights {
                 let mut light_intens = 0.0;
@@ -304,6 +309,16 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                     }
 
                     light_intens = if is_in_shadow {0.0} else {1.0};
+
+                    for _ps in 0..scene.path_samples {
+                        let rand_dir = random.random_direction();
+                        for obj in &objects {
+                            let s_inter = obj.intersect(&light.position, &rand_dir, std::f64::MAX);
+                            if s_inter.is_some() {
+                                light_verts.push(s_inter.unwrap().pos);
+                            }
+                        }
+                    }
                 }
                 else if let LightType::Sphere = light.ltype {
                     let mut v = 0.0;
@@ -336,36 +351,41 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                 let diffuse = shade::shade_oren_nayar(&ldir, &inter.normal, &vdir, mat.roughness, 0.01);
                 let specular = shade::shade_cook_torrance(&ldir, &vdir, &inter.normal, mat.roughness, 0.01);
                 let shading = diffuse + specular;
-                                
+
                 let light_total = shading * light_intens;
-                lcolor.r = lcolor.r + (light.color.r * light_total);
-                lcolor.g = lcolor.g + (light.color.g * light_total);
-                lcolor.b = lcolor.b + (light.color.b * light_total);
+
+                lcolor.r += light.color.r * light_total;
+                lcolor.g += light.color.g * light_total;
+                lcolor.b += light.color.b * light_total;
             }
 
-            let mut path_color = Color::black();
-            for _ps in 0..scene.path_samples {
-                let path_dir = random.random_point_on_hemisphere(&inter.normal).normalize();
-                let pc = trace(&inter.pos, &path_dir, scene, random, depth + 1);
+            if light_verts.len() > 0 {
+                let mut path_color = Color::black();
 
-                let diffuse = shade::shade_oren_nayar(&path_dir, &inter.normal, &vdir, mat.roughness, 0.01);
-                let specular = shade::shade_cook_torrance(&path_dir, &vdir, &inter.normal, mat.roughness, 0.01);
-                let shading = diffuse + specular;
+                for lv in &light_verts {
+                    let path_dir = lv - &inter.pos;
+                    let pc = trace(&inter.pos, &path_dir, scene, random, depth + 1);
+
+                    let diffuse = shade::shade_oren_nayar(&path_dir, &inter.normal, &vdir, mat.roughness, 0.1);
+                    let specular = shade::shade_cook_torrance(&path_dir, &vdir, &inter.normal, mat.roughness, 0.1);
+                    let shading = diffuse + specular;
+                    
+                    path_color.r += pc.r * shading;
+                    path_color.g += pc.g * shading;
+                    path_color.b += pc.b * shading;
+                }
+
+                let ps = 1.0 / (light_verts.len() as f64);
+                path_color.r *= ps;
+                path_color.g *= ps;
+                path_color.b *= ps;
                 
-                path_color.r += pc.r * shading;
-                path_color.g += pc.g * shading;
-                path_color.b += pc.b * shading;
+                lcolor.r += path_color.r;
+                lcolor.g += path_color.r;
+                lcolor.b += path_color.r;
             }
-            let ps = 1.0 / (scene.path_samples as f64);
-            path_color.r *= ps;
-            path_color.g *= ps;
-            path_color.b *= ps;
-            
-            lcolor.r += path_color.r;
-            lcolor.g += path_color.r;
-            lcolor.b += path_color.r;
 
-            //Enabling this only show GI
+            //Enabling this only shows GI
             /*if depth == 0 {
                 result.r = path_color.r;
                 result.g = path_color.g;
