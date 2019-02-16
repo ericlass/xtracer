@@ -2,7 +2,7 @@
   "scene": {
     "skycolor": [0.0, 0.0, 0.0],
     "max_trace_depth": 1,
-    "path_samples": 4,
+    "path_samples": 8,
     "materials": [
       {
         "id": "mate_red",
@@ -44,9 +44,29 @@
         "material": "mate_grey"
       },
       {
+        "center": [-1001.2, 0.0, 5.0],
+        "radius": 1000.0,
+        "material": "mate_grey"
+      },
+      {
+        "center": [0.0, 0.0, 1008.0],
+        "radius": 1000.0,
+        "material": "mate_grey"
+      },
+      {
         "center": [0.0, 0.0, 5.0],
         "radius": 0.4,
         "material": "mate_green"
+      },
+      {
+        "center": [-0.8, -0.1, 5.0],
+        "radius": 0.3,
+        "material": "mate_red"
+      },
+      {
+        "center": [0.8, -0.1, 5.0],
+        "radius": 0.3,
+        "material": "mate_blue"
       }
     ],
     "lights": [
@@ -64,6 +84,6 @@
     "file": "render.tga",
     "width": 1920,
     "height": 1080,
-    "samples": 1
+    "samples": 4
   }
 }

@@ -51,6 +51,11 @@ pub fn shade_oren_nayar(l: &Vector4F, n: &Vector4F, v: &Vector4F, rough: f64, al
 
   let cp = saturate(Vector4F::dot(&lp, &vp));
 
+  //Avoid div by 0
+  if ct_x == 0.0 || ct_y == 0.0 {
+    return 0.0;
+  }
+
   let don = cp * st / f64::max(ct_x, ct_y);
   let dif = ct_x * (on_x + on_y * don);
 

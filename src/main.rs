@@ -13,10 +13,12 @@ mod stopwatch;
 mod tga;
 
 use linear::Vector4F;
+use linear::Intersection;
 use settings::Settings;
 use settings::Scene;
 use settings::Color;
 use settings::LightType;
+use settings::Intersectable;
 use std::fs::File;
 use std::io::Read;
 use std::sync::Arc;
@@ -244,6 +246,41 @@ fn main() {
     println!("TOTAL: {}ms", total_watch.get_millis());
 }
 
+//Checks if the given ray (ray_org -> ray_dir) intersects any of the objects in the given vec and returns the closest point of intersection and the corresponding object.
+fn intersect<'a>(ray_org: &Vector4F, ray_dir: &Vector4F, objects: &'a Vec<&Intersectable>) -> (Option<Intersection>, Option<&'a Intersectable>) {
+    let mut closest = None;
+    let mut closest_object = None;
+    let mut min_t = std::f64::MAX;
+
+    for obj in objects {
+        let intersection = obj.intersect(ray_org, ray_dir, min_t);
+
+        if intersection.is_some() {
+            let inter = intersection.unwrap();
+
+            if inter.ray_t < min_t {
+                min_t = inter.ray_t;
+                closest = Some(inter);
+                closest_object = Some(*obj);
+            }
+        }
+    }
+
+    (closest, closest_object)
+}
+
+//Checks if the given ray (ray_org -> ray_dir) intersects any of the objects in the given vec.
+fn intersect_any(ray_org: &Vector4F, ray_dir: &Vector4F, objects: &Vec<&Intersectable>) -> bool {
+    for obj in objects {
+        if obj.intersect(ray_org, ray_dir, std::f64::MAX).is_some() {
+            return true;
+        }
+    }
+
+    false
+}
+
+//Traces the given ray (ray_org -> ray_dir) from the camera into the scene, shading and recursivly path tracing accordingly. Returns the color of the pixel.
 fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Random, depth: u32) -> Color {
     let mut result = Color::black();
 
@@ -253,32 +290,14 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
 
     let objects = scene.objects();
 
-    let mut closest = None;
-    let mut closest_object = None;
-    let mut min_t = std::f64::MAX;
-
-    for obj in &objects {
-        let intersection = obj.intersect(ray_org, ray_dir, min_t);
-
-        if intersection.is_some() {
-            let inter = intersection.unwrap();
-
-            if inter.ray_t < min_t {
-                min_t = inter.ray_t;
-                closest = Some(inter);
-                closest_object = Some(obj);
-            }
-        }
-    }
+    let inter = intersect(ray_org, ray_dir, &objects);
+    let closest = inter.0;
+    let closest_object = inter.1;
 
     if closest.is_some() {
         let inter = closest.unwrap();
         let object = closest_object.unwrap();
         let vdir = (ray_org - &inter.pos).normalize();
-
-        if inter.ray_t == 0.0 {
-            dbg!(inter.ray_t);
-        }
 
         let mat_name = object.material();
         let mut material = None;
@@ -299,24 +318,14 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                 let ldir = (&light.position - &inter.pos).normalize();
 
                 if let LightType::Point = light.ltype {
-                    let mut is_in_shadow = false;
-
-                    for obj in &objects {
-                        if obj.intersect(&inter.pos, &ldir, std::f64::MAX).is_some() {
-                            is_in_shadow = true;
-                            break;
-                        }
-                    }
-
-                    light_intens = if is_in_shadow {0.0} else {1.0};
+                    light_intens = if intersect_any(&inter.pos, &ldir, &objects) {0.0} else {1.0};
 
                     for _ps in 0..scene.path_samples {
                         let rand_dir = random.random_direction();
-                        for obj in &objects {
-                            let s_inter = obj.intersect(&light.position, &rand_dir, std::f64::MAX);
-                            if s_inter.is_some() {
-                                light_verts.push(s_inter.unwrap().pos);
-                            }
+                        let s_inter = intersect(&light.position, &rand_dir, &objects).0;
+
+                        if s_inter.is_some() {
+                            light_verts.push(s_inter.unwrap().pos);
                         }
                     }
                 }
@@ -326,16 +335,8 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                     for _sample in 0..light.samples {
                         let rand_pos = random.random_point_on_sphere(&light.position, light.radius);
                         let sample_dir = &rand_pos - &inter.pos;
-                        let mut is_in_shadow = false;
 
-                        for obj in &objects {
-                            if obj.intersect(&inter.pos, &sample_dir, std::f64::MAX).is_some() {
-                                is_in_shadow = true;
-                                break;
-                            }
-                        }
-
-                        if !is_in_shadow {
+                        if !intersect_any(&inter.pos, &sample_dir, &objects) {
                             v = v + 1.0;
                         }
                     }
@@ -369,20 +370,22 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                     let diffuse = shade::shade_oren_nayar(&path_dir, &inter.normal, &vdir, mat.roughness, 0.1);
                     let specular = shade::shade_cook_torrance(&path_dir, &vdir, &inter.normal, mat.roughness, 0.1);
                     let shading = diffuse + specular;
-                    
+
                     path_color.r += pc.r * shading;
                     path_color.g += pc.g * shading;
                     path_color.b += pc.b * shading;
                 }
 
                 let ps = 1.0 / (light_verts.len() as f64);
+                
                 path_color.r *= ps;
                 path_color.g *= ps;
                 path_color.b *= ps;
                 
+
                 lcolor.r += path_color.r;
-                lcolor.g += path_color.r;
-                lcolor.b += path_color.r;
+                lcolor.g += path_color.g;
+                lcolor.b += path_color.b;
             }
 
             //Enabling this only shows GI
