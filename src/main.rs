@@ -1,6 +1,7 @@
 extern crate time;
 extern crate rand;
 extern crate num_cpus;
+extern crate oidn;
 
 mod json;
 mod linear;
@@ -144,9 +145,9 @@ fn main() {
                         spy += sample_width;
                     }
 
-                    pix_color.r = pix_color.r / samples2;
-                    pix_color.g = pix_color.g / samples2;
-                    pix_color.b = pix_color.b / samples2;
+                    pix_color.r = pix_color.r / samples2 as f32;
+                    pix_color.g = pix_color.g / samples2 as f32;
+                    pix_color.b = pix_color.b / samples2 as f32;
                     colors.push(pix_color);
 
                     px += img_pix_inc_h;
@@ -355,9 +356,9 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
 
                 let light_total = shading * light_intens;
 
-                lcolor.r += light.color.r * light_total;
-                lcolor.g += light.color.g * light_total;
-                lcolor.b += light.color.b * light_total;
+                lcolor.r += light.color.r * light_total as f32;
+                lcolor.g += light.color.g * light_total as f32;
+                lcolor.b += light.color.b * light_total as f32;
             }
 
             if light_verts.len() > 0 {
@@ -371,16 +372,16 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                     let specular = shade::shade_cook_torrance(&path_dir, &vdir, &inter.normal, mat.roughness, 0.1);
                     let shading = diffuse + specular;
 
-                    path_color.r += pc.r * shading;
-                    path_color.g += pc.g * shading;
-                    path_color.b += pc.b * shading;
+                    path_color.r += pc.r * shading as f32;
+                    path_color.g += pc.g * shading as f32;
+                    path_color.b += pc.b * shading as f32;
                 }
 
                 let ps = 1.0 / (light_verts.len() as f64);
                 
-                path_color.r *= ps;
-                path_color.g *= ps;
-                path_color.b *= ps;
+                path_color.r *= ps as f32;
+                path_color.g *= ps as f32;
+                path_color.b *= ps as f32;
                 
 
                 lcolor.r += path_color.r;
@@ -435,11 +436,11 @@ fn load_settings() -> Settings {
     panic!("Unable to read settings!");
 }
 
-fn convert(v: f64, rand: &mut Random) -> u8 {
+fn convert(v: f32, rand: &mut Random) -> u8 {
     let mut result = v;
 
     //Add some slight random noise to reduce banding
-    let r = rand.random_f() * 2.0 - 1.0;
+    let r = (rand.random_f() * 2.0 - 1.0) as f32;
     result = result + (r * (1.0 / 512.0));
     
     if result < 0.0 {

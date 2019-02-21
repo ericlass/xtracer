@@ -84,6 +84,6 @@
     "file": "render.tga",
     "width": 1920,
     "height": 1080,
-    "samples": 4
+    "samples": 1
   }
 }

@@ -12,13 +12,13 @@ use octree::OctreeNode;
 use stopwatch::StopWatch;
 
 pub struct Color {
-  pub r: f64,
-  pub g: f64,
-  pub b: f64,
+  pub r: f32,
+  pub g: f32,
+  pub b: f32,
 }
 
 impl Color {
-  pub fn new(r: f64, g: f64, b: f64) -> Color {
+  pub fn new(r: f32, g: f32, b: f32) -> Color {
     Color {r, g, b}
   }
 
@@ -210,9 +210,9 @@ fn read_scene(scene: JsonValue) -> Option<Scene> {
     for f in fields {
       if f.0 == "skycolor" {
         let v = read_number_triplet(&f.1).unwrap();
-        skycolor.r = v.0;
-        skycolor.g = v.1;
-        skycolor.b = v.2;
+        skycolor.r = v.0 as f32;
+        skycolor.g = v.1 as f32;
+        skycolor.b = v.2 as f32;
       }
       else if f.0 == "max_trace_depth" {
         if let JsonValue::Number(md) = f.1 {
@@ -274,7 +274,7 @@ fn read_materials(materials: Vec<JsonValue>) -> Vec<Material> {
           }
         } else if f.0 == "color" {
           let values = read_number_triplet(&f.1).unwrap();
-          color = Color::new(values.0, values.1, values.2);
+          color = Color::new(values.0 as f32, values.1 as f32, values.2 as f32);
         } else if f.0 == "refract" {
           if let JsonValue::Number(refr) = f.1 {
             refract = refr;
@@ -513,9 +513,9 @@ fn read_lights(lights: Vec<JsonValue>) -> Vec<Light> {
         } else if f.0 == "color" {
           let values = read_number_triplet(&f.1).unwrap();
           color = Color {
-            r: values.0,
-            g: values.1,
-            b: values.2,
+            r: values.0 as f32,
+            g: values.1 as f32,
+            b: values.2 as f32,
           }
         } else if f.0 == "radius" {
           if let JsonValue::Number(rad) = f.1 {
