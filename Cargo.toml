@@ -7,4 +7,4 @@ authors = ["ericlass"]
 time = "0.1.40"
 rand = "0.6"
 num_cpus = "1.8.0"
-oidn = "0.1.0"
+

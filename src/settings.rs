@@ -166,6 +166,7 @@ pub struct Output {
   pub width: u32,
   pub height: u32,
   pub samples: u32,
+  pub denoise: bool
 }
 
 pub struct Settings {
@@ -558,6 +559,7 @@ fn read_output(output: JsonValue) -> Option<Output> {
     let mut width = 1920;
     let mut height = 1080;
     let mut samples = 1;
+    let mut denoise = false;
 
     for f in fields {
       if f.0 == "file" {
@@ -580,13 +582,19 @@ fn read_output(output: JsonValue) -> Option<Output> {
           samples = num as u32;
         }
       }
+      else if f.0 == "denoise" {
+        if let JsonValue::Boolean(bol) = f.1 {
+          denoise = bol;
+        }
+      }
     }
 
     return Some(Output {
       filename,
       width,
       height,
-      samples
+      samples,
+      denoise
     });
   }
 

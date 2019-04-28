@@ -1,7 +1,6 @@
 extern crate time;
 extern crate rand;
 extern crate num_cpus;
-extern crate oidn;
 
 mod json;
 mod linear;
@@ -68,7 +67,7 @@ fn main() {
     //Pre-calculate values for multi sampling
     let samplesi = settings.output.samples;
     let samples = samplesi as f64;
-    let samples2 = samples * samples;
+    let samples2 = (samples * samples) as f32;
     let sample_width = img_pix_inc_h / samples;
     let sample_offset = (img_pix_inc_h / 2.0) - (sample_width / 2.0);
 
@@ -78,14 +77,8 @@ fn main() {
     let numcpus = num_cpus::get();
     println!("Number of CPUs: {}", numcpus);
 
-    let mut lines: Vec<Vec<Color>> = Vec::with_capacity(img_h as usize);
-    for _i in 0..img_h {
-        let mut line = Vec::with_capacity(img_w as usize);
-        for _j in 0..img_w {
-            line.push(Color::black());
-        }
-        lines.push(line);
-    }
+    let num_values = img_h * img_w * 3;
+    let mut final_buffer = vec![0.0f32; num_values as usize];
 
     let mut total_watch = StopWatch::new();
     total_watch.start();
@@ -112,14 +105,18 @@ fn main() {
             thread::spawn(move || {
                 let mut random = Random::new(31 + iy);
                 let mut px = img_plane_l;
-                let mut colors = Vec::with_capacity(img_w as usize);
+
+                let num_values = (img_w * 3) as usize;
+                let mut colors = Vec::with_capacity(num_values);
 
                 for _ix in 0..img_w {
                     //Create sample grid of samples * samples sub-pixels
                     let sub_pix_l = px - sample_offset;
                     let sub_pix_b = py - sample_offset;
 
-                    let mut pix_color = Color::black();
+                    let mut pcr = 0.0;
+                    let mut pcg = 0.0;
+                    let mut pcb = 0.0;
 
                     let steps = larc_settings.output.samples;
                     let mut spy = sub_pix_b;
@@ -136,19 +133,18 @@ fn main() {
                             let ray_dir = &pixel - &larc_cam_pos;
                             let pc = trace(&larc_cam_pos, &ray_dir, &larc_settings.scene, &mut random, 0);
 
-                            pix_color.r += pc.r;
-                            pix_color.g += pc.g;
-                            pix_color.b += pc.b;
+                            pcr += pc.r;
+                            pcg += pc.g;
+                            pcb += pc.b;
 
                             spx += sample_width;
                         }
                         spy += sample_width;
                     }
 
-                    pix_color.r = pix_color.r / samples2 as f32;
-                    pix_color.g = pix_color.g / samples2 as f32;
-                    pix_color.b = pix_color.b / samples2 as f32;
-                    colors.push(pix_color);
+                    colors.push(pcb / samples2);
+                    colors.push(pcg / samples2);
+                    colors.push(pcr / samples2);
 
                     px += img_pix_inc_h;
                 }
@@ -167,15 +163,16 @@ fn main() {
             let result = rxv.unwrap();
             let line = result.0 as usize;
 
-            let orig = &mut lines[line];
-            let new = &result.1;
-            for l in 0..new.len() {
-                let oc = &mut orig[l];
-                let nc = &new[l];
+            let stride = img_w as usize * 3;
+            let start = line * stride;
+            let end = start + stride;
 
-                oc.r = oc.r + nc.r;
-                oc.g = oc.g + nc.g;
-                oc.b = oc.b + nc.b;
+            let new = &result.1;
+
+            let mut nl = 0;
+            for l in start..end {
+                final_buffer[l] += new[nl];
+                nl += 1;
             }
 
             num_threads -= 1;
@@ -198,16 +195,17 @@ fn main() {
         let rxv = rx.recv();
         let result = rxv.unwrap();
         let line = result.0 as usize;
-        
-        let orig = &mut lines[line];
-        let new = &result.1;
-        for l in 0..new.len() {
-            let oc = &mut orig[l];
-            let nc = &new[l];
 
-            oc.r = oc.r + nc.r;
-            oc.g = oc.g + nc.g;
-            oc.b = oc.b + nc.b;
+        let stride = img_w as usize * 3;
+        let start = line * stride;
+        let end = start + stride;
+
+        let new = &result.1;
+
+        let mut nl = 0;
+        for l in start..end {
+            final_buffer[l] += new[nl];
+            nl += 1;
         }
 
         num_threads -= 1;
@@ -222,12 +220,8 @@ fn main() {
     stop_watch.start();
     let mut pixels = Vec::with_capacity(((img_w * img_h) * 3) as usize);
     let mut rand = Random::new(97);
-    for line in &lines {
-        for col in line {
-            pixels.push(convert(col.b, &mut rand));
-            pixels.push(convert(col.g, &mut rand));
-            pixels.push(convert(col.r, &mut rand));
-        }
+    for line in &final_buffer {
+        pixels.push(convert(*line, &mut rand));
     }    
     stop_watch.stop();
     println!("Convert time: {}ms", stop_watch.get_millis());
@@ -245,6 +239,9 @@ fn main() {
     println!("=========================");
     total_watch.stop();
     println!("TOTAL: {}ms", total_watch.get_millis());
+
+    let spp = (samplesi * samplesi) * (arc_settings.scene.path_samples.pow(arc_settings.scene.max_depth));
+    println!("Samples Per Pixel: {}", spp);
 }
 
 //Checks if the given ray (ray_org -> ray_dir) intersects any of the objects in the given vec and returns the closest point of intersection and the corresponding object.
@@ -350,9 +347,11 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                 let ratio = light.radius / ldist;
                 light_intens = (ratio * ratio) * light_intens * light.intensity;
                 
-                let diffuse = shade::shade_oren_nayar(&ldir, &inter.normal, &vdir, mat.roughness, 0.01);
+                /*let diffuse = shade::shade_oren_nayar(&ldir, &inter.normal, &vdir, mat.roughness, 0.01);
                 let specular = shade::shade_cook_torrance(&ldir, &vdir, &inter.normal, mat.roughness, 0.01);
-                let shading = diffuse + specular;
+                let shading = diffuse + specular;*/
+
+                let shading = shade::shade_lambert(&ldir, &inter.normal);
 
                 let light_total = shading * light_intens;
 
@@ -368,9 +367,11 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                     let path_dir = lv - &inter.pos;
                     let pc = trace(&inter.pos, &path_dir, scene, random, depth + 1);
 
-                    let diffuse = shade::shade_oren_nayar(&path_dir, &inter.normal, &vdir, mat.roughness, 0.1);
+                    /*let diffuse = shade::shade_oren_nayar(&path_dir, &inter.normal, &vdir, mat.roughness, 0.1);
                     let specular = shade::shade_cook_torrance(&path_dir, &vdir, &inter.normal, mat.roughness, 0.1);
-                    let shading = diffuse + specular;
+                    let shading = diffuse + specular;*/
+
+                    let shading = shade::shade_lambert(&path_dir, &inter.normal);
 
                     path_color.r += pc.r * shading as f32;
                     path_color.g += pc.g * shading as f32;
@@ -381,8 +382,7 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                 
                 path_color.r *= ps as f32;
                 path_color.g *= ps as f32;
-                path_color.b *= ps as f32;
-                
+                path_color.b *= ps as f32;                
 
                 lcolor.r += path_color.r;
                 lcolor.g += path_color.g;
