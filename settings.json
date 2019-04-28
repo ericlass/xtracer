@@ -2,7 +2,7 @@
   "scene": {
     "skycolor": [0.0, 0.0, 0.0],
     "max_trace_depth": 1,
-    "path_samples": 8,
+    "path_samples": 16,
     "materials": [
       {
         "id": "mate_red",
@@ -74,8 +74,8 @@
         "type": "point",
         "position": [2.0, 2.0, 1.0],
         "color": [0.6, 0.8, 0.9],
-        "intensity": 1300.0,
-        "radius": 0.1,
+        "intensity": 100.0,
+        "radius": 0.4,
         "samples": 1
       }
     ]
@@ -84,7 +84,7 @@
     "file": "render.tga",
     "width": 1920,
     "height": 1080,
-    "samples": 3,
+    "samples": 2,
     "denoise": true
   }
 }

@@ -309,7 +309,6 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
         if material.is_some() {
             let mat = material.unwrap();
             let mut lcolor = Color::black();
-            let mut light_verts = Vec::with_capacity(scene.path_samples as usize);
 
             for light in &scene.lights {
                 let mut light_intens = 0.0;
@@ -317,15 +316,6 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
 
                 if let LightType::Point = light.ltype {
                     light_intens = if intersect_any(&inter.pos, &ldir, &objects) {0.0} else {1.0};
-
-                    for _ps in 0..scene.path_samples {
-                        let rand_dir = random.random_direction();
-                        let s_inter = intersect(&light.position, &rand_dir, &objects).0;
-
-                        if s_inter.is_some() {
-                            light_verts.push(s_inter.unwrap().pos);
-                        }
-                    }
                 }
                 else if let LightType::Sphere = light.ltype {
                     let mut v = 0.0;
@@ -360,11 +350,11 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                 lcolor.b += light.color.b * light_total as f32;
             }
 
-            if light_verts.len() > 0 {
+            if scene.path_samples > 0 {
                 let mut path_color = Color::black();
 
-                for lv in &light_verts {
-                    let path_dir = lv - &inter.pos;
+                for _ps in 0..scene.path_samples {
+                    let path_dir = random.random_point_on_hemisphere(&inter.normal);
                     let pc = trace(&inter.pos, &path_dir, scene, random, depth + 1);
 
                     /*let diffuse = shade::shade_oren_nayar(&path_dir, &inter.normal, &vdir, mat.roughness, 0.1);
@@ -378,11 +368,11 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                     path_color.b += pc.b * shading as f32;
                 }
 
-                let ps = 1.0 / (light_verts.len() as f64);
+                let ps = 1.0 / (scene.path_samples as f32);
                 
-                path_color.r *= ps as f32;
-                path_color.g *= ps as f32;
-                path_color.b *= ps as f32;                
+                path_color.r *= ps;
+                path_color.g *= ps;
+                path_color.b *= ps;
 
                 lcolor.r += path_color.r;
                 lcolor.g += path_color.g;
