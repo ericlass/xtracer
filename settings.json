@@ -2,7 +2,7 @@
   "scene": {
     "skycolor": [0.0, 0.0, 0.0],
     "max_trace_depth": 1,
-    "path_samples": 16,
+    "path_samples": 4,
     "materials": [
       {
         "id": "mate_red",
@@ -54,11 +54,6 @@
         "material": "mate_grey"
       },
       {
-        "center": [0.0, 0.0, 5.0],
-        "radius": 0.4,
-        "material": "mate_green"
-      },
-      {
         "center": [-0.8, -0.1, 5.0],
         "radius": 0.3,
         "material": "mate_red"
@@ -67,6 +62,15 @@
         "center": [0.8, -0.1, 5.0],
         "radius": 0.3,
         "material": "mate_blue"
+      }
+    ],
+    "meshes": [
+      {
+        "file": "bunny.obj",
+        "translation": [0.0, -0.4, 5.0],
+        "rotation": [0.0, 180.0, 0.0],
+        "scale": [0.07, 0.07, 0.07],
+        "material": "mate_green"
       }
     ],
     "lights": [
@@ -84,7 +88,7 @@
     "file": "render.tga",
     "width": 1920,
     "height": 1080,
-    "samples": 2,
+    "samples": 3,
     "denoise": true
   }
 }
