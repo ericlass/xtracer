@@ -1,6 +1,6 @@
 use linear;
 use linear::Vector4F;
-use settings::Triangle;
+use settings::Mesh;
 
 pub struct OctreeNode {
   pub children: Vec<OctreeNode>,
@@ -56,7 +56,7 @@ fn qmax(v1: f64, v2: f64, v3: f64, v4: f64) -> f64 {
 /// - *triangles*: Vec of trianlges
 /// 
 /// returns: Octree with fixed depth
-pub fn build_octree(triangles: &Vec<Triangle>) -> OctreeNode {
+pub fn build_octree(mesh: &Mesh) -> OctreeNode {
   let mut result = OctreeNode::new();
 
   let mut min = Vector4F {
@@ -73,16 +73,20 @@ pub fn build_octree(triangles: &Vec<Triangle>) -> OctreeNode {
     w: 1.0
   };
 
-  let mut indexes = Vec::with_capacity(triangles.len());
+  let mut indexes = Vec::with_capacity(mesh.triangles.len());
   let mut i = 0;
-  for tri in triangles {
-    min.x = qmin(min.x, tri.v1.pos.x, tri.v2.pos.x, tri.v3.pos.x);
-    min.y = qmin(min.y, tri.v1.pos.y, tri.v2.pos.y, tri.v3.pos.y);
-    min.z = qmin(min.z, tri.v1.pos.z, tri.v2.pos.z, tri.v3.pos.z);
+  for tri in &mesh.triangles {
+    let vert1 = &mesh.vertices[tri.0];
+    let vert2 = &mesh.vertices[tri.1];
+    let vert3 = &mesh.vertices[tri.2];
 
-    max.x = qmax(max.x, tri.v1.pos.x, tri.v2.pos.x, tri.v3.pos.x);
-    max.y = qmax(max.y, tri.v1.pos.y, tri.v2.pos.y, tri.v3.pos.y);
-    max.z = qmax(max.z, tri.v1.pos.z, tri.v2.pos.z, tri.v3.pos.z);
+    min.x = qmin(min.x, vert1.pos.x, vert2.pos.x, vert3.pos.x);
+    min.y = qmin(min.y, vert1.pos.y, vert2.pos.y, vert3.pos.y);
+    min.z = qmin(min.z, vert1.pos.z, vert2.pos.z, vert3.pos.z);
+
+    max.x = qmax(max.x, vert1.pos.x, vert2.pos.x, vert3.pos.x);
+    max.y = qmax(max.y, vert1.pos.y, vert2.pos.y, vert3.pos.y);
+    max.z = qmax(max.z, vert1.pos.z, vert2.pos.z, vert3.pos.z);
 
     indexes.push(i);
     i += 1;
@@ -90,7 +94,7 @@ pub fn build_octree(triangles: &Vec<Triangle>) -> OctreeNode {
 
   result.min = min;
   result.max = max;
-  build_octree_rec(&mut result, triangles, &indexes, 1, 6);
+  build_octree_rec(&mut result, mesh, &indexes, 1, 6);
 
   result
 }
@@ -102,7 +106,7 @@ pub fn build_octree(triangles: &Vec<Triangle>) -> OctreeNode {
 /// - *indexes*: list of indexes in the triangles list that are to be considered for the current node.
 /// - *depth*: current depth of the node in the tree.
 /// - *max_depth*: maximum tree depth.
-fn build_octree_rec(node: &mut OctreeNode, triangles: &Vec<Triangle>, indexes: &Vec<usize>, depth: u32, max_depth: u32) {
+fn build_octree_rec(node: &mut OctreeNode, mesh: &Mesh, indexes: &Vec<usize>, depth: u32, max_depth: u32) {
   let min = &node.min;
   let max = &node.max;
   
@@ -111,8 +115,12 @@ fn build_octree_rec(node: &mut OctreeNode, triangles: &Vec<Triangle>, indexes: &
   if depth > 1 {
     tris = Vec::new();
     for t in indexes {
-      let tri = &triangles[*t];
-      if linear::triangle_aabb_overlap(&tri.v1.pos, &tri.v2.pos, &tri.v3.pos, min, max) {
+      let tri = mesh.triangles[*t];
+      let vert1 = &mesh.vertices[tri.0];
+      let vert2 = &mesh.vertices[tri.1];
+      let vert3 = &mesh.vertices[tri.2];
+
+      if linear::triangle_aabb_overlap(&vert1.pos, &vert2.pos, &vert3.pos, min, max) {
         tris.push(*t);
       }
     }
@@ -144,7 +152,7 @@ fn build_octree_rec(node: &mut OctreeNode, triangles: &Vec<Triangle>, indexes: &
         nnode.min = nmin;
         nnode.max = nmax;
         
-        build_octree_rec(&mut nnode, triangles, &tris, depth + 1, max_depth);
+        build_octree_rec(&mut nnode, mesh, &tris, depth + 1, max_depth);
         node.children.push(nnode);
 
         z += half_z;

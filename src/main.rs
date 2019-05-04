@@ -295,7 +295,7 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
     if closest.is_some() {
         let inter = closest.unwrap();
         let object = closest_object.unwrap();
-        let vdir = (ray_org - &inter.pos).normalize();
+        //let vdir = (ray_org - &inter.pos).normalize();
 
         let mat_name = object.material();
         let mut material = None;
