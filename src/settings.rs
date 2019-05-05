@@ -71,9 +71,14 @@ impl Intersectable for Sphere {
   }
 }
 
+pub struct Triangle {
+  pub v1: Vertex4F,
+  pub v2: Vertex4F,
+  pub v3: Vertex4F,
+}
+
 pub struct Mesh {
-  pub vertices: Vec<Vertex4F>,
-  pub triangles: Vec<(usize, usize, usize)>,
+  pub triangles: Vec<Triangle>,
   pub translation: Vector4F,
   pub rotation: Vector4F,
   pub scale: Vector4F,
@@ -90,16 +95,13 @@ impl Intersectable for Mesh {
 
     for t in candidates {
         let tri = &self.triangles[t];
-        let vert0 = &self.vertices[tri.0];
-        let vert1 = &self.vertices[tri.1];
-        let vert2 = &self.vertices[tri.2];
 
         let intersection = linear::intersect_ray_triangle(
             &rorg,
             &rdir,
-            vert0,
-            vert1,
-            vert2,
+            &tri.v1,
+            &tri.v2,
+            &tri.v3,
             lmin_t
         );
 
@@ -358,7 +360,6 @@ fn read_meshes(meshes: Vec<JsonValue>) -> Vec<Mesh> {
   for mesh in meshes {
     if let JsonValue::Object(fields) = mesh {
       let mut vertices = Vec::new();
-      let mut triangles = Vec::new();
       let mut translation = Vector4F::null();
       let mut rotation = Vector4F::null();
       let mut scale = Vector4F::new(1.0, 1.0, 1.0);
@@ -368,10 +369,8 @@ fn read_meshes(meshes: Vec<JsonValue>) -> Vec<Mesh> {
         if f.0 == "file" {
           if let JsonValue::String(s) = f.1 {
             println!("Loading mesh: '{}'", s);
-            let mesh_data = obj::load_obj(s.as_str());
-            vertices = mesh_data.0;
-            triangles = mesh_data.1;
-            println!("Loaded {} vertices, {} triangles", vertices.len(), triangles.len());
+            vertices = obj::load_obj(s.as_str());
+            println!("Loaded {} vertices, {} triangles", vertices.len(), vertices.len() / 3);
           }
         }
         else if f.0 == "translation" {
@@ -422,17 +421,17 @@ fn read_meshes(meshes: Vec<JsonValue>) -> Vec<Mesh> {
       stopwatch.stop();
       println!("Transforming vertices took {}ms", stopwatch.get_millis());
 
-      /*
       stopwatch.start();
       let triangles = create_triangles(&mut vertices);
       stopwatch.stop();
       println!("Creating triangles took {}ms", stopwatch.get_millis());
-      */
 
-      let octree = OctreeNode::new();
+      stopwatch.start();
+      let octree = octree::build_octree(&triangles);
+      stopwatch.stop();
+      println!("Building octree took {}ms", stopwatch.get_millis());
 
       let mut m = Mesh {
-        vertices,
         triangles,
         translation,
         rotation,
@@ -441,12 +440,6 @@ fn read_meshes(meshes: Vec<JsonValue>) -> Vec<Mesh> {
         octree
       };
 
-      stopwatch.start();
-      let real_octree = octree::build_octree(&m);
-      m.octree = real_octree;
-      stopwatch.stop();
-      println!("Building octree took {}ms", stopwatch.get_millis());
-
       result.push(m);
     }
   }
@@ -454,7 +447,6 @@ fn read_meshes(meshes: Vec<JsonValue>) -> Vec<Mesh> {
   result
 }
 
-/*
 fn create_triangles(verts: &mut Vec<Vertex4F>) -> Vec<Triangle> {
   let num_tris = verts.len() / 3;
   let mut result = Vec::with_capacity(num_tris);
@@ -473,7 +465,6 @@ fn create_triangles(verts: &mut Vec<Vertex4F>) -> Vec<Triangle> {
 
   result
 }
-*/
 
 fn read_lights(lights: Vec<JsonValue>) -> Vec<Light> {
   let mut result = Vec::new();

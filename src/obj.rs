@@ -1,13 +1,8 @@
-use std::cmp::Eq;
-use std::cmp::PartialEq;
-use std::collections::HashMap;
-use std::hash::Hash;
-use std::hash::Hasher;
+use linear::Vector4F;
+use linear::Vertex4F;
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
-use linear::Vector4F;
-use linear::Vertex4F;
 
 struct Vertex {
   vi: usize,
@@ -15,28 +10,9 @@ struct Vertex {
   ti: usize,
 }
 
-impl PartialEq for Vertex {
-  fn eq(&self, other: &Vertex) -> bool {
-    return self.vi == other.vi &&
-           self.ni == other.ni &&
-           self.ti == other.ti;
-  }
-}
-
-impl Eq for Vertex {}
-
-impl Hash for Vertex {
-  fn hash<H: Hasher>(&self, state: &mut H) {
-    state.write_usize(self.vi);
-    state.write_usize(self.ni);
-    state.write_usize(self.ti);
-  }
-}
-
 //Loads triangles from an OBJ file. Only triangles are supported.
-//In the returned tuple, the first value is the list of unique vertices for the mesh.
-//The second value is a list of 3-tuples with vertex indexes. Each tuple is a triangle.
-pub fn load_obj(filename: &str) -> (Vec<Vertex4F>, Vec<(usize, usize, usize)>) {
+//In the returned vec, each pair of three values in a row form a triangle.
+pub fn load_obj(filename: &str) -> Vec<Vertex4F> {
   let file = File::open(filename).unwrap();
   let reader = BufReader::new(file);
 
@@ -61,120 +37,33 @@ pub fn load_obj(filename: &str) -> (Vec<Vertex4F>, Vec<(usize, usize, usize)>) {
     }
   }
 
-  //Map from OBJ vertex to mesh vertex index
-  let mut vertex_map: HashMap<Vertex, usize> = HashMap::new();
-  //List of mesh vertices
-  let mut mesh_vertices = Vec::new();
-  //List of 3-tuples of mesh vertex indexes, forming the triangles
-  let mut mesh_face_indexes = Vec::new();
+  let mut result = Vec::new();
 
-  for face in faces {
-    //TODO: Get rid of this? Maybe fixed size array or even directly tuple?
-    let mut face_indexes = Vec::with_capacity(3);
-    let mut has_normals = false;
-   
-    for v in face {
-    	if vertex_map.contains_key(&v) {
-      	let index = vertex_map.get(&v).unwrap();
-      	face_indexes.push(*index);
-    	}
-    	else {
-      	let mut vertex = Vertex4F::new();
-      	
-        if v.vi > 0 {
-          let vpos = vertices[v.vi - 1];
-          vertex.pos = Vector4F::new(vpos.0, vpos.1, vpos.2);
-        }
-
-        if v.ni > 0 {
-          let vnorm = normals[v.ni - 1];
-          vertex.normal = Vector4F::new(vnorm.0, vnorm.1, vnorm.2).normalize();
-          has_normals = true;
-        }
-
-        if v.ti > 0 {
-          let vtex = tex_coords[v.ti - 1];
-          vertex.tex_u = vtex.0;
-          vertex.tex_v = vtex.1;
-        }
-     	 
-      	let index = mesh_vertices.len();
-      	mesh_vertices.push(vertex);
-      	face_indexes.push(index);
-      	vertex_map.insert(v, index);
-    	}
-    }
-
-    if !has_normals {
-      let i0 = face_indexes[0];
-      let i1 = face_indexes[1];
-      let i2 = face_indexes[2];
-
-      let mut vert0 = mesh_vertices[i0].clone();
-      let mut vert1 = mesh_vertices[i1].clone();
-      let mut vert2 = mesh_vertices[i2].clone();
-
-      let edge1 = &vert0.pos - &vert1.pos;
-      let edge2 = &vert2.pos - &vert1.pos;
-      let cross = Vector4F::cross(&edge2, &edge1).normalize();
-
-      vert0.normal = cross.clone();
-      vert1.normal = cross.clone();
-      vert2.normal = cross;
-
-      mesh_vertices[i0] = vert0;
-      mesh_vertices[i1] = vert1;
-      mesh_vertices[i2] = vert2;
-    }
-   
-    mesh_face_indexes.push((face_indexes[0], face_indexes[1], face_indexes[2]));
-  }
-
-  return (mesh_vertices, mesh_face_indexes);
-
-  /*
-  let mesh = Mesh::new();
-  mesh.vertices = meshVertices;
-  mesh.faces = meshFaceIndexes;
-  */
-
-  /*
   for face in faces {
     let mut has_normals = false;
     let mut verts = Vec::new();
 
     for v in face {
-      let mut vertIndex;
+      let mut vert = Vertex4F::new();
 
-      let vertIndex = vertexMap.get(&v);
-      if vertIndex.is_some() {
-        meshVertexIndexes.push(*vertIndex.unwrap());
+      if v.vi > 0 {
+        let vpos = vertices[v.vi - 1];
+        vert.pos = Vector4F::new(vpos.0, vpos.1, vpos.2);
       }
-      else {
-        let mut vert = Vertex4F::new();
 
-        if v.vi > 0 {
-          let vpos = vertices[v.vi - 1];
-          vert.pos = Vector4F::new(vpos.0, vpos.1, vpos.2);
-        }
-
-        if v.ni > 0 {
-          let vnorm = normals[v.ni - 1];
-          vert.normal = Vector4F::new(vnorm.0, vnorm.1, vnorm.2).normalize();
-          has_normals = true;
-        }
-
-        if v.ti > 0 {
-          let vtex = tex_coords[v.ti - 1];
-          vert.tex_u = vtex.0;
-          vert.tex_v = vtex.1;
-        }
-
-        meshVertices.push(vert);
-        let newIndex = meshVertices.len() - 1;
-        meshVertexIndexes.push(newIndex);
-        vertexMap.insert(v, newIndex);
+      if v.ni > 0 {
+        let vnorm = normals[v.ni - 1];
+        vert.normal = Vector4F::new(vnorm.0, vnorm.1, vnorm.2).normalize();
+        has_normals = true;
       }
+
+      if v.ti > 0 {
+        let vtex = tex_coords[v.ti - 1];
+        vert.tex_u = vtex.0;
+        vert.tex_v = vtex.1;
+      }
+
+      verts.push(vert);
     }
 
     if !has_normals {
@@ -191,10 +80,8 @@ pub fn load_obj(filename: &str) -> (Vec<Vertex4F>, Vec<(usize, usize, usize)>) {
       result.push(v);
     }
   }
-  
 
   result
-  */
 }
 
 fn read_vertex(line: String) -> (f64, f64, f64) {

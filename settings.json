@@ -88,7 +88,7 @@
     "file": "render.tga",
     "width": 1920,
     "height": 1080,
-    "samples": 2,
+    "samples": 3,
     "denoise": true
   }
 }
