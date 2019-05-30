@@ -4,16 +4,16 @@ use rand::Rng;
 const PI: f64 = 3.1415926535897932384626433;
 
 pub struct Random {
-    rand_seed: u32
+    rand_seed: u32,
 }
 
 impl Random {
     pub fn new(seed: u32) -> Random {
-        Random {rand_seed: seed}
+        Random { rand_seed: seed }
     }
 
     //Crete random number in range 0...u32.MAX
-    pub fn random (&mut self) -> u32 {
+    pub fn random(&mut self) -> u32 {
         rand::thread_rng().gen()
     }
 
@@ -34,7 +34,7 @@ impl Random {
             x: sin_phi * theta.cos(),
             y: sin_phi * theta.sin(),
             z: phi.cos(),
-            w: 1.0
+            w: 1.0,
         }
     }
 
@@ -50,7 +50,7 @@ impl Random {
             x: pos.x + (radius * usp.x),
             y: pos.y + (radius * usp.y),
             z: pos.z + (radius * usp.z),
-            w: 1.0
+            w: 1.0,
         }
     }
 
@@ -58,6 +58,10 @@ impl Random {
     pub fn random_point_on_hemisphere(&mut self, n: &Vector4F) -> Vector4F {
         let usp = self.random_point_on_unit_sphere();
         let pdotn = Vector4F::dot(&usp, n);
-        if pdotn < 0.0 {usp.invert()} else {usp}
+        if pdotn < 0.0 {
+            usp.invert()
+        } else {
+            usp
+        }
     }
 }

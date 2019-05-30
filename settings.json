@@ -1,7 +1,7 @@
 {
   "scene": {
     "skycolor": [0.0, 0.0, 0.0],
-    "max_trace_depth": 1,
+    "max_trace_depth": 0,
     "path_samples": 4,
     "materials": [
       {
@@ -64,12 +64,12 @@
         "material": "mate_blue"
       }
     ],
-    "meshes": [
+    "voxels": [
       {
-        "file": "bunny.obj",
-        "translation": [0.0, -0.4, 5.0],
-        "rotation": [0.0, 180.0, 0.0],
-        "scale": [0.07, 0.07, 0.07],
+        "file": "3x3x3.vox",
+        "translation": [-0.375, -0.4, 5.0],
+        "rotation": [0.0, 0.0, 0.0],
+        "scale": [0.25, 0.25, 0.25],
         "material": "mate_green"
       }
     ],
@@ -88,6 +88,6 @@
     "file": "render.tga",
     "width": 1920,
     "height": 1080,
-    "samples": 3
+    "samples": 1
   }
 }

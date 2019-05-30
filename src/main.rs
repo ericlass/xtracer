@@ -1,6 +1,6 @@
-extern crate time;
-extern crate rand;
 extern crate num_cpus;
+extern crate rand;
+extern crate time;
 
 mod json;
 mod linear;
@@ -11,25 +11,28 @@ mod settings;
 mod shade;
 mod stopwatch;
 mod tga;
+mod vox;
 
-use linear::Vector4F;
 use linear::Intersection;
-use settings::Settings;
-use settings::Scene;
+use linear::Vector4F;
+use random::Random;
 use settings::Color;
-use settings::LightType;
 use settings::Intersectable;
+use settings::LightType;
+use settings::Scene;
+use settings::Settings;
 use std::fs::File;
 use std::io::Read;
-use std::sync::Arc;
 use std::sync::mpsc;
+use std::sync::Arc;
 use std::thread;
 use stopwatch::StopWatch;
-use random::Random;
 
 const HALF_SECOND: u64 = 500000000;
 
 fn main() {
+    vox::read_voxels("E:\\Programme\\MagicaVoxel-0.99.2-alpha-win64\\vox\\3x3x3.vox");
+
     let ro = Vector4F::new(1.01, 0.0, -2.0);
     let rd = Vector4F::new(0.0, 0.0, 1.0);
 
@@ -75,6 +78,7 @@ fn main() {
     let arc_cam_pos = Arc::new(cam_pos);
 
     let numcpus = num_cpus::get();
+    //let numcpus = 1;
     println!("Number of CPUs: {}", numcpus);
 
     let num_values = img_h * img_w * 3;
@@ -91,8 +95,8 @@ fn main() {
     let mut py = img_plane_b;
 
     let mut num_threads = 0;
-    let mut iy = 0;    
-    
+    let mut iy = 0;
+
     let (tx, rx) = mpsc::channel();
 
     while iy < img_h {
@@ -120,7 +124,7 @@ fn main() {
 
                     let steps = larc_settings.output.samples;
                     let mut spy = sub_pix_b;
-                    for _spy in 0..steps  {
+                    for _spy in 0..steps {
                         let mut spx = sub_pix_l;
                         for _spx in 0..steps {
                             let pixel = Vector4F {
@@ -130,8 +134,14 @@ fn main() {
                                 w: 0.0,
                             };
 
-                            let ray_dir = &pixel - &larc_cam_pos;
-                            let pc = trace(&larc_cam_pos, &ray_dir, &larc_settings.scene, &mut random, 0);
+                            let ray_dir = (&pixel - &larc_cam_pos).normalize();
+                            let pc = trace(
+                                &larc_cam_pos,
+                                &ray_dir,
+                                &larc_settings.scene,
+                                &mut random,
+                                0,
+                            );
 
                             pcr += pc.r;
                             pcg += pc.g;
@@ -148,10 +158,10 @@ fn main() {
 
                     px += img_pix_inc_h;
                 }
-                    
+
                 ltx.send((liy, colors)).unwrap();
             });
-            
+
             num_threads += 1;
             py += img_pix_inc_v;
             iy += 1;
@@ -222,7 +232,7 @@ fn main() {
     let mut rand = Random::new(97);
     for line in &final_buffer {
         pixels.push(convert(*line, &mut rand));
-    }    
+    }
     stop_watch.stop();
     println!("Convert time: {}ms", stop_watch.get_millis());
 
@@ -240,12 +250,20 @@ fn main() {
     total_watch.stop();
     println!("TOTAL: {}ms", total_watch.get_millis());
 
-    let spp = (samplesi * samplesi) * (arc_settings.scene.path_samples.pow(arc_settings.scene.max_depth));
+    let spp = (samplesi * samplesi)
+        * (arc_settings
+            .scene
+            .path_samples
+            .pow(arc_settings.scene.max_depth));
     println!("Samples Per Pixel: {}", spp);
 }
 
 //Checks if the given ray (ray_org -> ray_dir) intersects any of the objects in the given vec and returns the closest point of intersection and the corresponding object.
-fn intersect<'a>(ray_org: &Vector4F, ray_dir: &Vector4F, objects: &'a Vec<&Intersectable>) -> (Option<Intersection>, Option<&'a Intersectable>) {
+fn intersect<'a>(
+    ray_org: &Vector4F,
+    ray_dir: &Vector4F,
+    objects: &'a Vec<&Intersectable>,
+) -> (Option<Intersection>, Option<&'a Intersectable>) {
     let mut closest = None;
     let mut closest_object = None;
     let mut min_t = std::f64::MAX;
@@ -264,6 +282,8 @@ fn intersect<'a>(ray_org: &Vector4F, ray_dir: &Vector4F, objects: &'a Vec<&Inter
         }
     }
 
+    //println!("min_t: {}", min_t);
+
     (closest, closest_object)
 }
 
@@ -279,7 +299,13 @@ fn intersect_any(ray_org: &Vector4F, ray_dir: &Vector4F, objects: &Vec<&Intersec
 }
 
 //Traces the given ray (ray_org -> ray_dir) from the camera into the scene, shading and recursivly path tracing accordingly. Returns the color of the pixel.
-fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Random, depth: u32) -> Color {
+fn trace(
+    ray_org: &Vector4F,
+    ray_dir: &Vector4F,
+    scene: &Scene,
+    random: &mut Random,
+    depth: u32,
+) -> Color {
     let mut result = Color::black();
 
     if depth > scene.max_depth {
@@ -315,9 +341,12 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                 let ldir = (&light.position - &inter.pos).normalize();
 
                 if let LightType::Point = light.ltype {
-                    light_intens = if intersect_any(&inter.pos, &ldir, &objects) {0.0} else {1.0};
-                }
-                else if let LightType::Sphere = light.ltype {
+                    light_intens = if intersect_any(&inter.pos, &ldir, &objects) {
+                        0.0
+                    } else {
+                        1.0
+                    };
+                } else if let LightType::Sphere = light.ltype {
                     let mut v = 0.0;
 
                     for _sample in 0..light.samples {
@@ -336,7 +365,7 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                 let ldist = (&light.position - &inter.pos).len();
                 let ratio = light.radius / ldist;
                 light_intens = (ratio * ratio) * light_intens * light.intensity;
-                
+
                 /*let diffuse = shade::shade_oren_nayar(&ldir, &inter.normal, &vdir, mat.roughness, 0.01);
                 let specular = shade::shade_cook_torrance(&ldir, &vdir, &inter.normal, mat.roughness, 0.01);
                 let shading = diffuse + specular;*/
@@ -369,7 +398,7 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                 }
 
                 let ps = 1.0 / (scene.path_samples as f32);
-                
+
                 path_color.r *= ps;
                 path_color.g *= ps;
                 path_color.b *= ps;
@@ -386,10 +415,10 @@ fn trace(ray_org: &Vector4F, ray_dir: &Vector4F, scene: &Scene, random: &mut Ran
                 result.b = path_color.b;
             }
             else {*/
-                result.r = mat.color.r * lcolor.r;
-                result.g = mat.color.g * lcolor.g;
-                result.b = mat.color.b * lcolor.b;
-            //}
+            result.r = mat.color.r * lcolor.r;
+            result.g = mat.color.g * lcolor.g;
+            result.b = mat.color.b * lcolor.b;
+        //}
         } else {
             //If no material could be found, color is black
             println!("Material not found: {}", mat_name);
@@ -432,14 +461,13 @@ fn convert(v: f32, rand: &mut Random) -> u8 {
     //Add some slight random noise to reduce banding
     let r = (rand.random_f() * 2.0 - 1.0) as f32;
     result = result + (r * (1.0 / 512.0));
-    
+
     if result < 0.0 {
         result = 0.0;
-    }
-    else if result > 1.0 {
+    } else if result > 1.0 {
         result = 1.0;
     }
-    
+
     result = result * 255.0;
 
     result.round() as u8
