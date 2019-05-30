@@ -242,7 +242,6 @@ impl Intersectable for Voxels {
 
         //Transform ray origin and direction into object space
         let rorg_obj_space = &(rorg + inv_trans) * inv_scale;
-
         let rdir_obj_space = rdir
             .rotate_x(inv_rot.x)
             .rotate_y(inv_rot.y)
@@ -261,11 +260,53 @@ impl Intersectable for Voxels {
 
         let intersection = linear::intersect_ray_aabb2(&rorg_obj_space, &rdir_obj_space, &min, &max);
         if intersection.is_some() {
+            for z in 0..self.voxels.depth {
+                for y in 0..self.voxels.height {
+                    for x in 0..self.voxels.width {
+                        let voxel = self.voxels.get(x, y, z);
+                        if voxel.is_some() {
+                            //println!("some: {};{};{}", x, y, z);
+
+                            let min = Vector4F::new(x as f64, y as f64, z as f64);
+                            let max = Vector4F::new(x as f64 + 1.0, y as f64 + 1.0, z as f64 + 1.0);
+
+                            let intersection = linear::intersect_ray_aabb2(&rorg_obj_space, &rdir_obj_space, &min, &max);
+                            if intersection.is_some() {
+                                //println!("inter: {};{};{}", x, y, z);
+                                let inter = intersection.unwrap();
+
+                                let world_pos = &(&inter.pos * &self.scale) + &self.translation;
+                                let world_normal = inter.normal.rotate_x(self.rotation.x).rotate_y(self.rotation.y).rotate_z(self.rotation.z);
+                                //Need to recalc t with world coordinates
+                                let world_t = (world_pos.x - rorg.x) / rdir.x;
+
+                                //println!("ipos: {}", inter.pos);
+                                //println!("wpos: {}", world_pos);
+                                //println!("t: {}", world_t);
+
+                                return Some(Intersection {
+                                    pos: world_pos,
+                                    normal: world_normal,
+                                    tex_u: 0.0,
+                                    tex_v: 0.0,
+                                    barycentric: Vector4F::null(),
+                                    ray_t: world_t,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        /*
+        //For tracing only the AABB
+        let intersection = linear::intersect_ray_aabb2(&rorg_obj_space, &rdir_obj_space, &min, &max);
+        if intersection.is_some() {
             let inter = intersection.unwrap();
 
             let world_pos = &(&inter.pos * &self.scale) + &self.translation;
             let world_normal = inter.normal.rotate_x(self.rotation.x).rotate_y(self.rotation.y).rotate_z(self.rotation.z);
-
             //Need to recalc t with world coordinates
             let world_t = (world_pos.x - rorg.x) / rdir.x;
 
@@ -285,7 +326,9 @@ impl Intersectable for Voxels {
         else {
             return None;
         }
+        */
 
+        /*
         if linear::point_in_aabb(&rorg_obj_space, &min, &max) {
             //If ray origin is inside voxel grid, just truncate coordinates to get starting voxel
             x = rorg_obj_space.x as i32;
@@ -293,13 +336,25 @@ impl Intersectable for Voxels {
             z = rorg_obj_space.z as i32;
         } else {
             //Find voxel where ray enters
-            let inter = linear::intersect_ray_aabb(rorg, rdir, &min, &max);
+            let inter = linear::intersect_ray_aabb2(&rorg_obj_space, &rdir_obj_space, &min, &max);
             if inter.is_some() {
                 let intersection = inter.unwrap();
                 x = intersection.pos.x as i32;
                 y = intersection.pos.y as i32;
                 z = intersection.pos.z as i32;
-                println!("x;y;z: {};{};{}", x, y, z);
+
+                if x == self.voxels.width as i32 {
+                    //println!("x '{}' is out", x);
+                    x = (self.voxels.width - 1) as i32;
+                }
+                if y == self.voxels.height as i32 {
+                    //println!("y '{}' is out", y);
+                    y = (self.voxels.height - 1) as i32;
+                }
+                if z == self.voxels.depth as i32 {
+                    //println!("z '{}' is out", z);
+                    z = (self.voxels.depth - 1) as i32;
+                }
             } else {
                 return None;
             }
@@ -309,9 +364,9 @@ impl Intersectable for Voxels {
         let step_y = rdir_obj_space.y.signum() as i32;
         let step_z = rdir_obj_space.z.signum() as i32;
 
-        let out_x: i32 = if step_x > 0 {self.voxels.width as i32} else {0};
-        let out_y: i32 = if step_y > 0 {self.voxels.height as i32} else {0};
-        let out_z: i32 = if step_z > 0 {self.voxels.depth as i32} else {0};
+        let out_x: i32 = if step_x > 0 {self.voxels.width as i32} else {-1};
+        let out_y: i32 = if step_y > 0 {self.voxels.height as i32} else {-1};
+        let out_z: i32 = if step_z > 0 {self.voxels.depth as i32} else {-1};
 
         let mut t_max_x = get_max_element(rorg_obj_space.x, rdir_obj_space.x, self.voxels.width as f64);
         let mut t_max_y = get_max_element(rorg_obj_space.y, rdir_obj_space.y, self.voxels.height as f64);
@@ -322,6 +377,11 @@ impl Intersectable for Voxels {
         let t_delta_z = 1.0 / rdir_obj_space.z;
 
         let mut intersects = false;
+        //println!("---------------");
+        //println!("F x,y,z: {};{};{}", x, y, z);
+        //dbg!(step_x);
+        //dbg!(out_z);
+        
         loop {
             if t_max_x < t_max_y {
                 if t_max_x < t_max_z {
@@ -353,6 +413,7 @@ impl Intersectable for Voxels {
                 }
             }
 
+            //println!("x,y,z: {};{};{}", x, y, z);
             let voxel = self.voxels.get(x as u32, y as u32, z as u32);
             if voxel.is_some() {
                 intersects = true;
@@ -363,8 +424,34 @@ impl Intersectable for Voxels {
         if intersects {
             let min = Vector4F::new(x as f64, y as f64, z as f64);
             let max = Vector4F::new((x + 1) as f64, (y + 1) as f64, (z + 1) as f64);
-            return linear::intersect_ray_aabb(&rorg_obj_space, &rdir_obj_space, &min, &max);
+            let intersection = linear::intersect_ray_aabb2(&rorg_obj_space, &rdir_obj_space, &min, &max);
+
+            if intersection.is_some() {
+                let inter = intersection.unwrap();
+
+                let world_pos = &(&inter.pos * &self.scale) + &self.translation;
+                let world_normal = inter.normal.rotate_x(self.rotation.x).rotate_y(self.rotation.y).rotate_z(self.rotation.z);
+                //Need to recalc t with oroginal ray in world space
+                let world_t = (world_pos.x - rorg.x) / rdir.x;
+
+                //println!("ipos: {}", inter.pos);
+                //println!("wpos: {}", world_pos);
+                //println!("t: {}", world_t);
+
+                return Some(Intersection {
+                    pos: world_pos,
+                    normal: world_normal,
+                    tex_u: 0.0,
+                    tex_v: 0.0,
+                    barycentric: Vector4F::null(),
+                    ray_t: world_t,
+                });
+            }
+            else {
+                return None;
+            }
         }
+        */
 
         None
     }
