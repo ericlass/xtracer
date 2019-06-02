@@ -1,8 +1,8 @@
 {
   "scene": {
-    "skycolor": [0.0, 0.0, 0.0],
-    "max_trace_depth": 0,
-    "path_samples": 4,
+    "skycolor": [0.8, 0.8, 1.0],
+    "max_trace_depth": 1,
+    "path_samples": 8,
     "materials": [
       {
         "id": "mate_red",
@@ -88,6 +88,6 @@
     "file": "render.tga",
     "width": 1920,
     "height": 1080,
-    "samples": 1
+    "samples": 4
   }
 }

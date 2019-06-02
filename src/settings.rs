@@ -259,6 +259,9 @@ impl Intersectable for Voxels {
         );
 
         let intersection = linear::intersect_ray_aabb2(&rorg_obj_space, &rdir_obj_space, &min, &max);
+        let mut closest_intersection = None;
+        let mut min_t = std::f64::MAX;
+
         if intersection.is_some() {
             for z in 0..self.voxels.depth {
                 for y in 0..self.voxels.height {
@@ -274,29 +277,38 @@ impl Intersectable for Voxels {
                             if intersection.is_some() {
                                 //println!("inter: {};{};{}", x, y, z);
                                 let inter = intersection.unwrap();
-
-                                let world_pos = &(&inter.pos * &self.scale) + &self.translation;
-                                let world_normal = inter.normal.rotate_x(self.rotation.x).rotate_y(self.rotation.y).rotate_z(self.rotation.z);
-                                //Need to recalc t with world coordinates
-                                let world_t = (world_pos.x - rorg.x) / rdir.x;
-
-                                //println!("ipos: {}", inter.pos);
-                                //println!("wpos: {}", world_pos);
-                                //println!("t: {}", world_t);
-
-                                return Some(Intersection {
-                                    pos: world_pos,
-                                    normal: world_normal,
-                                    tex_u: 0.0,
-                                    tex_v: 0.0,
-                                    barycentric: Vector4F::null(),
-                                    ray_t: world_t,
-                                });
+                                let ray_t = inter.ray_t;
+                                if ray_t < min_t {
+                                    closest_intersection = Some(inter);
+                                    min_t = ray_t;
+                                }
                             }
                         }
                     }
                 }
             }
+        }
+
+        if closest_intersection.is_some() {
+            let inter = closest_intersection.unwrap();
+
+            let world_pos = &(&inter.pos * &self.scale) + &self.translation;
+            let world_normal = inter.normal.rotate_x(self.rotation.x).rotate_y(self.rotation.y).rotate_z(self.rotation.z);
+            //Need to recalc t with world coordinates
+            let world_t = (world_pos.x - rorg.x) / rdir.x;
+
+            //println!("ipos: {}", inter.pos);
+            //println!("wpos: {}", world_pos);
+            //println!("t: {}", world_t);
+
+            return Some(Intersection {
+                pos: world_pos,
+                normal: world_normal,
+                tex_u: 0.0,
+                tex_v: 0.0,
+                barycentric: Vector4F::null(),
+                ray_t: world_t,
+            });
         }
 
         /*

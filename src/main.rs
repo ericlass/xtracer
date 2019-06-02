@@ -31,8 +31,6 @@ use stopwatch::StopWatch;
 const HALF_SECOND: u64 = 500000000;
 
 fn main() {
-    vox::read_voxels("E:\\Programme\\MagicaVoxel-0.99.2-alpha-win64\\vox\\3x3x3.vox");
-
     let ro = Vector4F::new(1.01, 0.0, -2.0);
     let rd = Vector4F::new(0.0, 0.0, 1.0);
 
