@@ -20,7 +20,7 @@ fn saturate(v: f64) -> f64 {
 }
 
 //Taken from: http://shaderjvo.blogspot.com/2011/08/van-ouwerkerks-rewrite-of-oren-nayar.html
-pub fn shade_oren_nayar(l: &Vector4F, n: &Vector4F, v: &Vector4F, rough: f64, alb: f64) -> f64 {
+pub fn shade_oren_nayar(l: &Vector4F, n: &Vector4F, v: &Vector4F, rough: f64) -> f64 {
     let r2 = rough * rough;
     let onf_x = r2 / (r2 + 0.33);
     let onf_y = r2 / (r2 + 0.09);

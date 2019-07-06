@@ -2,13 +2,14 @@ extern crate num_cpus;
 extern crate rand;
 extern crate time;
 
+pub mod linear;
+pub mod random;
+pub mod settings;
+pub mod shade;
+
 mod json;
-mod linear;
 mod obj;
 mod octree;
-mod random;
-mod settings;
-mod shade;
 mod stopwatch;
 mod tga;
 mod vox;
@@ -31,15 +32,6 @@ use stopwatch::StopWatch;
 const HALF_SECOND: u64 = 500000000;
 
 fn main() {
-    let ro = Vector4F::new(1.01, 0.0, -2.0);
-    let rd = Vector4F::new(0.0, 0.0, 1.0);
-
-    let min = Vector4F::new(-1.0, -1.0, -1.0);
-    let max = Vector4F::new(1.0, 1.0, 1.0);
-
-    let int = linear::ray_intersects_aabb(&ro, &rd, &min, &max);
-    println!("Intersects: {}", int);
-
     let settings = load_settings();
 
     let cam_pos = Vector4F {
@@ -105,7 +97,7 @@ fn main() {
             let liy = iy;
 
             thread::spawn(move || {
-                let mut random = Random::new(31 + iy);
+                let mut random = Random::new();
                 let mut px = img_plane_l;
 
                 let num_values = (img_w * 3) as usize;
@@ -227,7 +219,7 @@ fn main() {
 
     stop_watch.start();
     let mut pixels = Vec::with_capacity(((img_w * img_h) * 3) as usize);
-    let mut rand = Random::new(97);
+    let mut rand = Random::new();
     for line in &final_buffer {
         pixels.push(convert(*line, &mut rand));
     }
@@ -253,7 +245,13 @@ fn main() {
             .scene
             .path_samples
             .pow(arc_settings.scene.max_depth));
-    println!("Samples Per Pixel: {}", spp);
+    println!("Samples Per Pixel : {}", spp);
+
+    let samples_total = spp * img_w * img_h;
+    println!("Samples Total     : {}", samples_total);
+
+    let sample_per_second = samples_total as f64 / (render_millis / 1000.0);
+    println!("Samples Per Second: {}", sample_per_second.round());
 }
 
 //Checks if the given ray (ray_org -> ray_dir) intersects any of the objects in the given vec and returns the closest point of intersection and the corresponding object.
@@ -319,7 +317,7 @@ fn trace(
     if closest.is_some() {
         let inter = closest.unwrap();
         let object = closest_object.unwrap();
-        let vdir = (ray_org - &inter.pos).normalize();
+        //let vdir = (ray_org - &inter.pos).normalize();
 
         let mat_name = object.material();
         let mut material = None;
@@ -455,6 +453,9 @@ fn load_settings() -> Settings {
 
 fn convert(v: f32, rand: &mut Random) -> u8 {
     let mut result = v;
+
+    //Gamma correction
+    result = result.powf(1.0 / 1.8);
 
     //Add some slight random noise to reduce banding
     let r = (rand.random_f() * 2.0 - 1.0) as f32;

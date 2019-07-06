@@ -625,7 +625,7 @@ pub fn intersect_ray_aabb2(
 ) -> Option<Intersection> {
     let mut inside = true;
 
-    let mut xt = 0.0;
+    let mut xt;
     let mut xn = 0.0;
     if rorg.x < min.x {
         xt = min.x - rorg.x;
@@ -649,7 +649,7 @@ pub fn intersect_ray_aabb2(
         xt = -1.0;
     }
 
-    let mut yt = 0.0;
+    let mut yt;
     let mut yn = 0.0;
     if rorg.y < min.y {
         yt = min.y - rorg.y;
@@ -673,7 +673,7 @@ pub fn intersect_ray_aabb2(
         yt = -1.0;
     }
 
-    let mut zt = 0.0;
+    let mut zt;
     let mut zn = 0.0;
     if rorg.z < min.z {
         zt = min.z - rorg.z;

@@ -229,7 +229,7 @@ pub struct Voxels {
 }
 
 impl Intersectable for Voxels {
-    fn intersect(&self, rorg: &Vector4F, rdir: &Vector4F, min_t: f64) -> Option<Intersection> {
+    fn intersect(&self, rorg: &Vector4F, rdir: &Vector4F, _min_t: f64) -> Option<Intersection> {
         //Create inverted transforms to be able to go from world space to object space
         let inv_trans = &self.translation.invert();
         let inv_rot = &self.rotation.invert();
@@ -247,9 +247,9 @@ impl Intersectable for Voxels {
             .rotate_y(inv_rot.y)
             .rotate_z(inv_rot.z);
 
-        let mut x: i32;
-        let mut y: i32;
-        let mut z: i32;
+        //let mut x: i32;
+        //let mut y: i32;
+        //let mut z: i32;
 
         let min = Vector4F::null();
         let max = Vector4F::new(
@@ -473,7 +473,7 @@ impl Intersectable for Voxels {
     }
 }
 
-fn get_max_element(org: f64, dir: f64, out: f64) -> f64 {
+fn _get_max_element(org: f64, dir: f64, out: f64) -> f64 {
     let mut max = if dir > 0.0 {std::f64::INFINITY} else {std::f64::NEG_INFINITY};
 
     if dir > 0.0 {
@@ -743,7 +743,7 @@ fn read_meshes(meshes: Vec<JsonValue>) -> Vec<Mesh> {
             stopwatch.stop();
             println!("Building octree took {}ms", stopwatch.get_millis());
 
-            let mut m = Mesh {
+            let m = Mesh {
                 triangles,
                 translation,
                 rotation,
@@ -827,7 +827,7 @@ fn read_voxels(voxels: Vec<JsonValue>) -> Vec<Voxels> {
             let voxels = voxels.unwrap();
             println!("Loaded {} voxels", voxels.data.len());
 
-            let mut v = Voxels {
+            let v = Voxels {
                 translation,
                 rotation,
                 scale,

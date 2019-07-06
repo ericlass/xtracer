@@ -4,12 +4,11 @@ use rand::Rng;
 const PI: f64 = 3.1415926535897932384626433;
 
 pub struct Random {
-    rand_seed: u32,
 }
 
 impl Random {
-    pub fn new(seed: u32) -> Random {
-        Random { rand_seed: seed }
+    pub fn new() -> Random {
+        Random {}
     }
 
     //Crete random number in range 0...u32.MAX

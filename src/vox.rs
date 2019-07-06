@@ -92,7 +92,7 @@ fn read_size_chunk(file: &mut File) -> (u32, u32, u32) {
 fn read_xyzi_chunk(file: &mut File, vox: &mut VoxelObject) -> u32 {
     let num_voxels = u32::from_le_bytes(read_four_bytes(file));
 
-    for i in 0..num_voxels {
+    for _i in 0..num_voxels {
         let bytes = read_four_bytes(file);
         let x = bytes[0] as u32;
         let y = bytes[1] as u32;
