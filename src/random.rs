@@ -21,6 +21,56 @@ impl Random {
         rand::thread_rng().gen()
     }
 
+    fn random_samples(&mut self, num_samples: u32) -> Vec<(f64, f64)> {
+        let sample_width = 1.0 / num_samples as f64;
+        let half_width = sample_width * 0.5;
+
+        let mut result = Vec::with_capacity((num_samples * num_samples) as usize);
+        for y in 0..num_samples {
+            for x in 0..num_samples {
+                let scatter = half_width * (self.random_f() - 0.5);
+                let offset = half_width + scatter;
+                let vx = (x as f64 * sample_width) + offset;
+                let vy = (y as f64 * sample_width) + offset;
+
+                result.push((vx, vy));
+            }
+        }
+
+        result
+    }
+
+    pub fn random_directions_in_hemisphere(&mut self, num_samples: u32, n: &Vector4F) -> Vec<Vector4F> {
+        //TODO: Do this inline and get &mut vec from outside to fill to avoid creating millions of vecs
+        let samples = self.random_samples(num_samples);
+
+        let mut result = Vec::new();
+        for sample in samples {
+            let u = sample.0;
+            let v = sample.1;
+            let theta = 2.0 * PI * u;
+            let phi = (2.0 * v - 1.0).acos();
+            let sin_phi = phi.sin();
+
+            let dir = Vector4F {
+                x: sin_phi * theta.cos(),
+                y: sin_phi * theta.sin(),
+                z: phi.cos(),
+                w: 1.0,
+            };
+
+            let pdotn = Vector4F::dot(&dir, n);
+            if pdotn < 0.0 {
+                result.push(dir.invert());
+            }
+            else {
+                result.push(dir);
+            }
+        }
+
+        result
+    }
+
     //Creates point on unit sphere centered at (0,0,0) with radius 1.0.
     fn random_point_on_unit_sphere(&mut self) -> Vector4F {
         let u = self.random_f();

@@ -240,11 +240,8 @@ fn main() {
     total_watch.stop();
     println!("TOTAL: {}ms", total_watch.get_millis());
 
-    let spp = (samplesi * samplesi)
-        * (arc_settings
-            .scene
-            .path_samples
-            .pow(arc_settings.scene.max_depth));
+    let path_samples = arc_settings.scene.path_samples * arc_settings.scene.path_samples;
+    let spp = (samplesi * samplesi) * (path_samples.pow(arc_settings.scene.max_depth));
     println!("Samples Per Pixel : {}", spp);
 
     let samples_total = spp * img_w * img_h;
@@ -378,7 +375,18 @@ fn trace(
             if scene.path_samples > 0 {
                 let mut path_color = Color::black();
 
-                for _ps in 0..scene.path_samples {
+                let sample_dirs = random.random_directions_in_hemisphere(scene.path_samples, &inter.normal);
+                for sdir in &sample_dirs {
+                    let pc = trace(&inter.pos, sdir, scene, random, depth + 1);
+
+                    let shading = shade::shade_lambert(sdir, &inter.normal);
+
+                    path_color.r += pc.r * shading as f32;
+                    path_color.g += pc.g * shading as f32;
+                    path_color.b += pc.b * shading as f32;
+                }
+
+                /*for _ps in 0..scene.path_samples {
                     let path_dir = random.random_point_on_hemisphere(&inter.normal);
                     let pc = trace(&inter.pos, &path_dir, scene, random, depth + 1);
 
@@ -391,9 +399,10 @@ fn trace(
                     path_color.r += pc.r * shading as f32;
                     path_color.g += pc.g * shading as f32;
                     path_color.b += pc.b * shading as f32;
-                }
+                }*/
 
-                let ps = 1.0 / (scene.path_samples as f32);
+                //let ps = 1.0 / (scene.path_samples as f32);
+                let ps = 1.0 / (sample_dirs.len() as f32);
 
                 path_color.r *= ps;
                 path_color.g *= ps;
